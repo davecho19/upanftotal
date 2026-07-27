@@ -1,0 +1,8 @@
+{
+  "name": "Visor de Planes UpConta & ANF",
+  "description": "Explorador de fichas técnicas de planes de suscripción de UpConta,Firmas Electrónicas ANF y cotizador interactivo para facturación, ERP, firmas y contadores.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
