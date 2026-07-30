@@ -5,7 +5,26 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(), 
+      tailwindcss(),
+      {
+        name: 'google-sheets-proxy',
+        configureServer(server) {
+          server.middlewares.use('/api/sheets', async (req, res) => {
+            try {
+              const response = await fetch("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0");
+              const csvText = await response.text();
+              res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+              res.end(csvText);
+            } catch (e) {
+              res.statusCode = 500;
+              res.end("Error fetching sheets");
+            }
+          });
+        }
+      }
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

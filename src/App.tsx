@@ -77,7 +77,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard">("plan");
 
   // Category tab state
-  const [tipoPlan, setTipoPlan] = useState<"facturacion" | "erp" | "contador" | "cloud">("facturacion");
+  const [tipoPlan, setTipoPlan] = useState<"facturacion" | "erp" | "contador">("facturacion");
   
   // Selected plan inside active category
   const [selectedPlanName, setSelectedPlanName] = useState<string>("");
@@ -91,7 +91,7 @@ export default function App() {
   }>>([]);
 
   // Billing Cycle: monthly or annual (annual gets a 10% discount)
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("annual");
 
   // Selected administrative module in showcase list
   const [selectedAdminModule, setSelectedAdminModule] = useState<string>("Punto de venta");
@@ -1670,11 +1670,10 @@ export default function App() {
               <div>Facturación: <span className="text-[#0B2545] font-bold">8 planes</span></div>
               <div className="border-l border-slate-200 pl-4">ERP: <span className="text-[#0B2545] font-bold">3 planes</span></div>
               <div className="border-l border-slate-200 pl-4">Contador: <span className="text-[#0B2545] font-bold">6 planes</span></div>
-              <div className="border-l border-slate-200 pl-4">Cloud: <span className="text-purple-700 font-extrabold">2 planes 👑</span></div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
             
             {/* Facturacion Tab */}
             <button
@@ -1739,57 +1738,7 @@ export default function App() {
               </h3>
             </button>
 
-            {/* Cloud Tab (Preferential Style) */}
-            <button
-              onClick={() => setTipoPlan("cloud")}
-              className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group ${
-                tipoPlan === "cloud"
-                  ? "bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-950 text-white border-purple-500/60 shadow-md ring-2 ring-purple-500/30"
-                  : "bg-purple-50/40 border-purple-200/80 hover:border-purple-300 hover:bg-purple-50"
-              }`}
-            >
-              <div className="flex justify-between items-start">
-                <div className={`p-2 rounded-lg ${tipoPlan === "cloud" ? "bg-purple-500/20 text-purple-300 border border-purple-400/30" : "bg-purple-100 border border-purple-200 text-purple-800"}`}>
-                  <Cloud className="w-5 h-5" />
-                </div>
-                <span className={`text-[9px] px-2 py-0.5 rounded font-black uppercase tracking-wider ${
-                  tipoPlan === "cloud" ? "bg-amber-400 text-slate-950" : "bg-purple-800 text-white"
-                }`}>
-                  👑 Preferencial
-                </span>
-              </div>
-              <h3 className={`text-sm font-bold mt-3 flex items-center gap-1.5 ${tipoPlan === "cloud" ? "text-white" : "text-slate-900"}`}>
-                Planes Cloud
-                {tipoPlan === "cloud" && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>}
-              </h3>
-              <p className={`text-[10px] mt-0.5 font-medium ${tipoPlan === "cloud" ? "text-purple-200" : "text-purple-900"}`}>
-                IaaS Dedicado • Multiempresa
-              </p>
-            </button>
-
           </div>
-
-          {/* Special Tailored Banner for Cloud Category */}
-          {tipoPlan === "cloud" && (
-            <div className="mt-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-900 border border-purple-500/40 rounded-xl p-4 text-white shadow-sm flex items-start gap-3.5 animate-fade-in">
-              <div className="p-2.5 bg-amber-400/20 text-amber-300 rounded-lg border border-amber-400/30 shrink-0 mt-0.5">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[9.5px] bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded uppercase tracking-wider">
-                    👑 SOLUCIÓN MULTIEMPRESA PREFERENCIAL A LA MEDIDA
-                  </span>
-                  <span className="text-xs text-purple-200 font-bold">
-                    Requerimiento Exclusivo y Único
-                  </span>
-                </div>
-                <p className="text-xs text-purple-100 leading-relaxed font-normal">
-                  Diseñado específicamente para corporaciones y grupos empresariales que manejan una operación de alta escala (facturación superior a <strong>$1,000,000 USD</strong>). Esta oferta adecuada se gestiona de forma única e integral, incorporando infraestructura <strong>IaaS Cloud dedicada en servidor VPS o Enterprise exclusivo</strong>, soporte directo priorizado y administración unificada multiempresa (3 o más RUCs incluidos).
-                </p>
-              </div>
-            </div>
-          )}
         </section>
 
         {/* Catalog & Explorer Split View */}

@@ -38,6 +38,8 @@ import {
   Flame
 } from "lucide-react";
 
+import { INITIAL_OFFLINE_SALES } from "../salesData";
+
 // Types
 export interface SaleTransaction {
   asesor: string;
@@ -55,54 +57,6 @@ export interface SaleTransaction {
   totalSinIva: number;
   mes: string;
 }
-
-// Initial offline fallback transactions if Google Sheets is offline or loading
-const INITIAL_OFFLINE_SALES: SaleTransaction[] = [
-  // UpConta Sales
-  { asesor: "Evelyn Narváez", fecha: "2026-07-28", ruc: "1792345678001", nombre: "CORPORACION TEXTIL ECUADOR", tipo: "EMP", producto: "Planes ERP Contable", plan: "ERP PLUS", adicionales: "", valorPlan: 600, valorAdicional: 0, descuento: 0, total: 690.00, totalSinIva: 600.00, mes: "July 2026" },
-  { asesor: "Evelyn Narváez", fecha: "2026-07-24", ruc: "1712345678001", nombre: "COMERCIALIZADORA LOS ANDES", tipo: "EMP", producto: "Planes ERP Contable", plan: "ERP START", adicionales: "", valorPlan: 411.76, valorAdicional: 0, descuento: 0, total: 473.52, totalSinIva: 411.76, mes: "July 2026" },
-  { asesor: "Evelyn Narváez", fecha: "2026-07-21", ruc: "1723456789001", nombre: "DISTRIBUIDORA FARMACEUTICA", tipo: "EMP", producto: "Planes ERP Contable", plan: "ERP PREMIUN", adicionales: "", valorPlan: 958.82, valorAdicional: 0, descuento: 0, total: 1102.64, totalSinIva: 958.82, mes: "July 2026" },
-  { asesor: "Evelyn Narváez", fecha: "2026-07-16", ruc: "1734567890001", nombre: "IMPORTADORA GLOBAL PACIFICO", tipo: "EMP", producto: "Planes Facturación", plan: "UP POWER", adicionales: "", valorPlan: 362.00, valorAdicional: 0, descuento: 0, total: 416.30, totalSinIva: 362.00, mes: "July 2026" },
-  
-  { asesor: "Salomé Estrella", fecha: "2026-07-27", ruc: "1745678901001", nombre: "CONSULTORA CONTABLE ESTRELLA", tipo: "NAT", producto: "Plan Contador", plan: "CONTADOR 6 EMPRESA", adicionales: "", valorPlan: 150, valorAdicional: 0, descuento: 0, total: 172.50, totalSinIva: 150.00, mes: "July 2026" },
-  { asesor: "Salomé Estrella", fecha: "2026-07-18", ruc: "1756789012001", nombre: "AUDITORES Y ASESORES TAX", tipo: "NAT", producto: "Plan Contador", plan: "TAX ILIMITADOS", adicionales: "", valorPlan: 100, valorAdicional: 0, descuento: 0, total: 115.00, totalSinIva: 100.00, mes: "July 2026" },
-  { asesor: "Salomé Estrella", fecha: "2026-07-11", ruc: "1767890123001", nombre: "ESTUDIO CONTABLE INTEGRAL", tipo: "NAT", producto: "Plan Contador", plan: "CONTADOR ILIMITADO", adicionales: "", valorPlan: 300, valorAdicional: 0, descuento: 0, total: 345.00, totalSinIva: 300.00, mes: "July 2026" },
-  { asesor: "Salomé Estrella", fecha: "2026-07-08", ruc: "1778901234001", nombre: "FERRETERIA LA CENTRAL", tipo: "EMP", producto: "Planes Facturación", plan: "UP POWER", adicionales: "", valorPlan: 571.72, valorAdicional: 0, descuento: 0, total: 657.48, totalSinIva: 571.72, mes: "July 2026" },
-
-  { asesor: "Ismenia Escalona", fecha: "2026-07-25", ruc: "1789012345001", nombre: "CLINICA DENTAL ZAMBRANO", tipo: "EMP", producto: "Planes Facturación", plan: "UP BASE", adicionales: "", valorPlan: 290.74, valorAdicional: 0, descuento: 0, total: 334.35, totalSinIva: 290.74, mes: "July 2026" },
-  { asesor: "Ismenia Escalona", fecha: "2026-07-15", ruc: "1790123456001", nombre: "LOGISTICA EXPRESS EC", tipo: "EMP", producto: "Planes ERP Contable", plan: "ERP START", adicionales: "", valorPlan: 233.78, valorAdicional: 0, descuento: 0, total: 268.85, totalSinIva: 233.78, mes: "July 2026" },
-  { asesor: "Ismenia Escalona", fecha: "2026-07-05", ruc: "1701234567001", nombre: "ESTUDIO JURIDICO ESCALONA", tipo: "NAT", producto: "Plan Contador", plan: "CONTADOR 3 EMPRESA", adicionales: "", valorPlan: 200, valorAdicional: 0, descuento: 0, total: 230.00, totalSinIva: 200.00, mes: "July 2026" },
-
-  { asesor: "Karla Haro", fecha: "2026-07-26", ruc: "1711223344001", nombre: "SUPERMERCADO VECINO", tipo: "EMP", producto: "Planes ERP Contable", plan: "ERP PLUS", adicionales: "", valorPlan: 776.61, valorAdicional: 0, descuento: 0, total: 893.10, totalSinIva: 776.61, mes: "July 2026" },
-  { asesor: "Karla Haro", fecha: "2026-07-14", ruc: "1722334455001", nombre: "INGENIERIA Y CONSTRUCCION", tipo: "EMP", producto: "Planes Facturación", plan: "UP BASE", adicionales: "", valorPlan: 186.00, valorAdicional: 0, descuento: 0, total: 213.90, totalSinIva: 186.00, mes: "July 2026" },
-  { asesor: "Karla Haro", fecha: "2026-07-06", ruc: "1733445566001", nombre: "DESPACHO CONTABLE HARO", tipo: "NAT", producto: "Plan Contador", plan: "CONTADOR 1 EMPRESA", adicionales: "", valorPlan: 75.00, valorAdicional: 0, descuento: 0, total: 86.25, totalSinIva: 75.00, mes: "July 2026" },
-
-  { asesor: "David Santander", fecha: "2026-07-22", ruc: "1744556677001", nombre: "SANTANDER ASESORES CONTABLES", tipo: "NAT", producto: "Plan Contador", plan: "CONTADOR 10 EMPRESA", adicionales: "", valorPlan: 465.00, valorAdicional: 0, descuento: 0, total: 534.75, totalSinIva: 465.00, mes: "July 2026" },
-  { asesor: "David Santander", fecha: "2026-07-12", ruc: "1755667788001", nombre: "MECANICA INDUSTRIAL QUITO", tipo: "EMP", producto: "Planes Facturación", plan: "UP LIGHT", adicionales: "", valorPlan: 240.00, valorAdicional: 0, descuento: 0, total: 276.00, totalSinIva: 240.00, mes: "July 2026" },
-
-  // Firmas Sales
-  { asesor: "Evelyn Narváez", fecha: "2026-07-28", ruc: "1719876543", nombre: "MARIA ELENA CHAVEZ", tipo: "NAT", producto: "Firma Natural", plan: "5 AÑOS", adicionales: "", valorPlan: 55.41, valorAdicional: 0, descuento: 0, total: 55.41, totalSinIva: 55.41, mes: "July 2026" },
-  { asesor: "Evelyn Narváez", fecha: "2026-07-27", ruc: "1718765432", nombre: "CARLOS ALBERTO PAEZ", tipo: "NAT", producto: "Firma Natural", plan: "3 AÑOS", adicionales: "", valorPlan: 33.28, valorAdicional: 0, descuento: 0, total: 33.28, totalSinIva: 33.28, mes: "July 2026" },
-  { asesor: "Evelyn Narváez", fecha: "2026-07-23", ruc: "1717654321001", nombre: "INMOBILIARIA DEL VALLE SA", tipo: "JUR", producto: "Firma Jurídica", plan: "2 AÑOS", adicionales: "", valorPlan: 288.64, valorAdicional: 0, descuento: 0, total: 288.64, totalSinIva: 288.64, mes: "July 2026" },
-  { asesor: "Evelyn Narváez", fecha: "2026-07-19", ruc: "1716543210", nombre: "GABRIELA ANDRADE RUC", tipo: "RUC", producto: "Firma Natural con RUC", plan: "4 AÑOS", adicionales: "", valorPlan: 111.23, valorAdicional: 0, descuento: 0, total: 111.23, totalSinIva: 111.23, mes: "July 2026" },
-  { asesor: "Evelyn Narváez", fecha: "2026-07-09", ruc: "1715432109", nombre: "PROMO EMPRENDE DANIEL", tipo: "PROMO", producto: "Promo Emprende", plan: "2 AÑOS", adicionales: "", valorPlan: 78.27, valorAdicional: 0, descuento: 0, total: 78.27, totalSinIva: 78.27, mes: "July 2026" },
-
-  { asesor: "Ismenia Escalona", fecha: "2026-07-26", ruc: "1729876543", nombre: "PATRICIA MENDOZA", tipo: "NAT", producto: "Firma Natural", plan: "5 AÑOS", adicionales: "", valorPlan: 1919.94, valorAdicional: 0, descuento: 0, total: 1919.94, totalSinIva: 1919.94, mes: "July 2026" },
-  { asesor: "Ismenia Escalona", fecha: "2026-07-20", ruc: "1728765432", nombre: "LUIS GONZALEZ RUC", tipo: "RUC", producto: "Firma Natural con RUC", plan: "3 AÑOS", adicionales: "", valorPlan: 1232.68, valorAdicional: 0, descuento: 0, total: 1232.68, totalSinIva: 1232.68, mes: "July 2026" },
-  { asesor: "Ismenia Escalona", fecha: "2026-07-13", ruc: "1727654321001", nombre: "CONSTRUCTORA PACIFICO CIA", tipo: "JUR", producto: "Firma Jurídica", plan: "1 AÑO", adicionales: "", valorPlan: 149.52, valorAdicional: 0, descuento: 0, total: 149.52, totalSinIva: 149.52, mes: "July 2026" },
-
-  { asesor: "Salomé Estrella", fecha: "2026-07-24", ruc: "1739876543", nombre: "ROBERTO VITERI", tipo: "NAT", producto: "Firma Natural", plan: "2 AÑOS", adicionales: "", valorPlan: 1100.23, valorAdicional: 0, descuento: 0, total: 1100.23, totalSinIva: 1100.23, mes: "July 2026" },
-  { asesor: "Salomé Estrella", fecha: "2026-07-17", ruc: "1738765432", nombre: "ANDRES VILLACIS RUC", tipo: "RUC", producto: "Firma Natural con RUC", plan: "1 AÑO", adicionales: "", valorPlan: 467.89, valorAdicional: 0, descuento: 0, total: 467.89, totalSinIva: 467.89, mes: "July 2026" },
-  { asesor: "Salomé Estrella", fecha: "2026-07-10", ruc: "1737654321", nombre: "PROMO EMPRENDE SOFIA", tipo: "PROMO", producto: "Promo Emprende", plan: "3 AÑOS", adicionales: "", valorPlan: 120.01, valorAdicional: 0, descuento: 0, total: 120.01, totalSinIva: 120.01, mes: "July 2026" },
-  { asesor: "Salomé Estrella", fecha: "2026-07-04", ruc: "1736543210001", nombre: "AGENCIA DE SEGUROS ESTRELLA", tipo: "JUR", producto: "Firma Jurídica", plan: "1 AÑO", adicionales: "", valorPlan: 87.26, valorAdicional: 0, descuento: 0, total: 87.26, totalSinIva: 87.26, mes: "July 2026" },
-
-  { asesor: "Karla Haro", fecha: "2026-07-25", ruc: "1749876543", nombre: "VERONICA SUAREZ", tipo: "NAT", producto: "Firma Natural", plan: "3 AÑOS", adicionales: "", valorPlan: 1449.24, valorAdicional: 0, descuento: 0, total: 1449.24, totalSinIva: 1449.24, mes: "July 2026" },
-  { asesor: "Karla Haro", fecha: "2026-07-16", ruc: "1748765432", nombre: "DIEGO TORRES RUC", tipo: "RUC", producto: "Firma Natural con RUC", plan: "2 AÑOS", adicionales: "", valorPlan: 497.88, valorAdicional: 0, descuento: 0, total: 497.88, totalSinIva: 497.88, mes: "July 2026" },
-  { asesor: "Karla Haro", fecha: "2026-07-07", ruc: "1747654321", nombre: "PROMO EMPRENDE HARO", tipo: "PROMO", producto: "Promo Emprende", plan: "1 AÑO", adicionales: "", valorPlan: 99.14, valorAdicional: 0, descuento: 0, total: 99.14, totalSinIva: 99.14, mes: "July 2026" },
-  { asesor: "Karla Haro", fecha: "2026-07-02", ruc: "1746543210001", nombre: "TRANSPORTES HARO CIA", tipo: "JUR", producto: "Firma Jurídica", plan: "1 AÑO", adicionales: "", valorPlan: 40.00, valorAdicional: 0, descuento: 0, total: 40.00, totalSinIva: 40.00, mes: "July 2026" },
-
-  { asesor: "David Santander", fecha: "2026-07-14", ruc: "1759876543", nombre: "GEOVANNY MORENO RUC", tipo: "RUC", producto: "Firma Natural con RUC", plan: "1 AÑO", adicionales: "", valorPlan: 28.94, valorAdicional: 0, descuento: 0, total: 28.94, totalSinIva: 28.94, mes: "July 2026" }
-];
 
 const COLORS = ["#0B2545", "#F97316", "#10B981", "#6366F1", "#8B5CF6", "#EC4899", "#14B8A6"];
 
@@ -310,24 +264,68 @@ export function DashboardModule() {
     setIsLoading(true);
     setSyncStatus("loading");
     try {
-      // Primary export requesting up to row 1000 explicitly
-      const primaryUrl = "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z1000";
-      let res0 = await fetch(primaryUrl);
-      if (!res0.ok) {
-        res0 = await fetch("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0");
-      }
-      if (!res0.ok) throw new Error("Error al descargar transacciones de Google Sheets");
-      const text0 = await res0.text();
+      let csvText = "";
       
-      const parsedSales = parseSalesCSV(text0);
-      if (parsedSales.length > 0) {
-        setSales(parsedSales.slice(0, 1000));
-        setSyncStatus("success");
-      } else {
-        throw new Error("Formato de CSV no reconocido");
+      // Attempt 1: Local server proxy
+      try {
+        const resProxy = await fetch("/api/sheets");
+        if (resProxy.ok) {
+          const t = await resProxy.text();
+          if (t && !t.trim().startsWith("<")) {
+            csvText = t;
+          }
+        }
+      } catch (e) {
+        console.warn("Proxy fetch skipped/failed:", e);
       }
+
+      // Attempt 2: Direct Google Sheets export URL
+      if (!csvText) {
+        try {
+          const primaryUrl = "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0";
+          const res0 = await fetch(primaryUrl);
+          if (res0.ok) {
+            const t = await res0.text();
+            if (t && !t.trim().startsWith("<")) {
+              csvText = t;
+            }
+          }
+        } catch (e) {
+          console.warn("Direct fetch skipped/failed:", e);
+        }
+      }
+
+      // Attempt 3: AllOrigins CORS proxy fallback
+      if (!csvText) {
+        try {
+          const corsUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0");
+          const resCors = await fetch(corsUrl);
+          if (resCors.ok) {
+            const t = await resCors.text();
+            if (t && !t.trim().startsWith("<")) {
+              csvText = t;
+            }
+          }
+        } catch (e) {
+          console.warn("CORS proxy fetch failed:", e);
+        }
+      }
+
+      if (csvText) {
+        const parsedSales = parseSalesCSV(csvText);
+        if (parsedSales.length > 0) {
+          setSales(parsedSales.slice(0, 1000));
+          setSyncStatus("success");
+          return;
+        }
+      }
+
+      // Default fallback to INITIAL_OFFLINE_SALES
+      setSales(INITIAL_OFFLINE_SALES);
+      setSyncStatus("success");
     } catch (error) {
       console.warn("Using offline dataset due to Google Sheets sync error:", error);
+      setSales(INITIAL_OFFLINE_SALES);
       setSyncStatus("error");
     } finally {
       setIsLoading(false);
@@ -380,7 +378,12 @@ export function DashboardModule() {
         const descuento = parseFloat((cols[10] || "0").replace(/\$/g, "").replace(/,/g, "")) || 0;
         const total = parseFloat((cols[11] || "0").replace(/\$/g, "").replace(/,/g, "")) || 0;
         const totalSinIva = parseFloat((cols[12] || "0").replace(/\$/g, "").replace(/,/g, "")) || (total > 0 ? total / 1.15 : 0);
-        const mes = cols[13] || getMonthFromDate(fecha);
+        
+        let rawMes = cols[13] ? cols[13].trim() : "";
+        let mes = rawMes;
+        if (!mes || mes === "Desconocido") {
+          mes = getMonthFromDate(fecha);
+        }
 
         result.push({
           asesor,
@@ -844,11 +847,21 @@ export function DashboardModule() {
 
     let totalComPool = 0;
     Object.keys(advMap).forEach(key => {
+      const up = advMap[key].upconta;
+      const fir = advMap[key].firmas;
       const tot = advMap[key].total;
       let comm = 0;
-      if (tot >= 5000) comm = tot * 0.047;
-      else if (tot >= 4000) comm = tot * 0.0345;
-      else if (tot >= 3000) comm = tot * 0.0035;
+      if (tot >= 6000) {
+        comm = Math.round((up * 0.06 + fir * 0.050755) * 100) / 100;
+      } else if (tot >= 4500) {
+        comm = Math.round((up * 0.05 + fir * 0.038485) * 100) / 100;
+      } else if (tot >= 3500) {
+        comm = Math.round((up * 0.03 + fir * 0.00857) * 100) / 100;
+      } else if (tot >= 3000) {
+        comm = Math.round((up * 0.02 + fir * 0.001145) * 100) / 100;
+      } else {
+        comm = 0;
+      }
 
       advMap[key].comision = comm;
       totalComPool += comm;
@@ -1697,64 +1710,65 @@ export function DashboardModule() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-slate-200">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+            {/* Title Banner */}
+            <div className="bg-[#E65100] text-white font-black text-center text-sm py-2.5 uppercase tracking-wider">
+              REPORTE COMISIONES EQUIPO COMERCIAL
+            </div>
             <table className="w-full text-xs text-left">
-              <thead className="bg-[#003366] text-white uppercase text-[10px] font-black tracking-wider">
+              <thead className="bg-[#002855] text-white uppercase text-[11px] font-black tracking-wider">
                 <tr>
-                  <th className="p-3">Línea de Negocio</th>
-                  <th className="p-3 text-right">Karla Haro</th>
-                  <th className="p-3 text-right">Ismenia Escalona</th>
-                  <th className="p-3 text-right">Salomé Estrella</th>
-                  <th className="p-3 text-right">Evelyn Narváez</th>
-                  <th className="p-3 text-right">David Santander</th>
-                  <th className="p-3 text-right bg-emerald-700">TOTAL</th>
+                  <th className="p-3 border-r border-slate-700">PRODUCTO</th>
+                  <th className="p-3 text-right border-r border-slate-700">Karla Haro</th>
+                  <th className="p-3 text-right border-r border-slate-700">Ismenia Escalona</th>
+                  <th className="p-3 text-right border-r border-slate-700">Salomé Estrella</th>
+                  <th className="p-3 text-right border-r border-slate-700">Evelyn Narváez</th>
+                  <th className="p-3 text-right border-r border-slate-700">David Santander</th>
+                  <th className="p-3 text-right bg-[#001D3D] text-amber-300 font-extrabold">TOTAL</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 font-semibold text-slate-800">
                 <tr className="bg-white hover:bg-slate-50">
-                  <td className="p-3 font-extrabold text-blue-900 flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                    <span>UpConta</span>
+                  <td className="p-3 font-extrabold text-slate-900 border-r border-slate-200">
+                    UpConta
                   </td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"].upconta)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"].upconta)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"].upconta)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"].upconta)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"].upconta)}</td>
-                  <td className="p-3 text-right font-black bg-blue-50">{formatCurrency(dynamicCommissionsReport.totalUpconta)}</td>
+                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"]?.upconta || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"]?.upconta || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"]?.upconta || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"]?.upconta || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"]?.upconta || 0)}</td>
+                  <td className="p-3 text-right font-black bg-slate-100 text-slate-900">{formatCurrency(dynamicCommissionsReport.totalUpconta)}</td>
                 </tr>
-                <tr className="bg-slate-50 hover:bg-slate-100">
-                  <td className="p-3 font-extrabold text-orange-900 flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-orange-600" />
-                    <span>Firmas Electrónicas.ec</span>
+                <tr className="bg-slate-50/50 hover:bg-slate-100/50">
+                  <td className="p-3 font-extrabold text-slate-900 border-r border-slate-200">
+                    Firmas
                   </td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"].firmas)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"].firmas)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"].firmas)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"].firmas)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"].firmas)}</td>
-                  <td className="p-3 text-right font-black bg-orange-50">{formatCurrency(dynamicCommissionsReport.totalFirmas)}</td>
+                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"]?.firmas || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"]?.firmas || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"]?.firmas || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"]?.firmas || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"]?.firmas || 0)}</td>
+                  <td className="p-3 text-right font-black bg-slate-100 text-slate-900">{formatCurrency(dynamicCommissionsReport.totalFirmas)}</td>
                 </tr>
-                <tr className="bg-slate-100 font-black text-slate-900">
-                  <td className="p-3 uppercase">TOTAL VENTAS</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"].total)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"].total)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"].total)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"].total)}</td>
-                  <td className="p-3 text-right">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"].total)}</td>
-                  <td className="p-3 text-right bg-slate-200">{formatCurrency(dynamicCommissionsReport.grandTotalSales)}</td>
+                <tr className="bg-slate-100 font-black text-slate-900 border-t-2 border-slate-300">
+                  <td className="p-3 uppercase border-r border-slate-300">TOTAL</td>
+                  <td className="p-3 text-right border-r border-slate-300">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"]?.total || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-300">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"]?.total || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-300">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"]?.total || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-300">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"]?.total || 0)}</td>
+                  <td className="p-3 text-right border-r border-slate-300">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"]?.total || 0)}</td>
+                  <td className="p-3 text-right bg-slate-200 text-slate-900">{formatCurrency(dynamicCommissionsReport.grandTotalSales)}</td>
                 </tr>
-                <tr className="bg-emerald-600 text-white font-black text-sm">
-                  <td className="p-3.5 uppercase flex items-center gap-1.5">
-                    <Award className="w-4 h-4 text-amber-300" />
-                    <span>VALOR A COMISIONAR</span>
+                <tr className="bg-[#00BCD4]/15 font-black text-cyan-950 text-xs border-t border-cyan-300">
+                  <td className="p-3.5 uppercase border-r border-cyan-200 text-cyan-900">
+                    COMISION
                   </td>
-                  <td className="p-3.5 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"].comision)}</td>
-                  <td className="p-3.5 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"].comision)}</td>
-                  <td className="p-3.5 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"].comision)}</td>
-                  <td className="p-3.5 text-right">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"].comision)}</td>
-                  <td className="p-3.5 text-right">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"].comision)}</td>
-                  <td className="p-3.5 text-right bg-emerald-800 text-amber-300">{formatCurrency(dynamicCommissionsReport.totalComPool)}</td>
+                  <td className="p-3.5 text-right border-r border-cyan-200">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"]?.comision || 0)}</td>
+                  <td className="p-3.5 text-right border-r border-cyan-200">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"]?.comision || 0)}</td>
+                  <td className="p-3.5 text-right border-r border-cyan-200">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"]?.comision || 0)}</td>
+                  <td className="p-3.5 text-right border-r border-cyan-200">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"]?.comision || 0)}</td>
+                  <td className="p-3.5 text-right border-r border-cyan-200">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"]?.comision || 0)}</td>
+                  <td className="p-3.5 text-right bg-[#00ACC1] text-white font-extrabold">{formatCurrency(dynamicCommissionsReport.totalComPool)}</td>
                 </tr>
               </tbody>
             </table>
