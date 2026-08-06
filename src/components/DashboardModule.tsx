@@ -235,7 +235,59 @@ const CustomBarTooltip = ({ active, payload, label, formatCurrency }: any) => {
   return null;
 };
 
+const getCurrentMonthString = (): string => {
+  const now = new Date();
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  return `${months[now.getMonth()]} ${now.getFullYear()}`;
+};
+
+const getMonthDateRange = (monthStr: string) => {
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const parts = monthStr.split(" ");
+  if (parts.length === 2) {
+    const mIdx = monthNames.indexOf(parts[0]);
+    const y = parseInt(parts[1], 10);
+    if (mIdx !== -1 && !isNaN(y)) {
+      const mm = String(mIdx + 1).padStart(2, "0");
+      const lastDay = new Date(y, mIdx + 1, 0).getDate();
+      return {
+        start: `${y}-${mm}-01`,
+        end: `${y}-${mm}-${String(lastDay).padStart(2, "0")}`
+      };
+    }
+  }
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+  return { start: `${y}-${m}-01`, end: `${y}-${m}-${lastDay}` };
+};
+
+const MONTH_TRANSLATIONS: Record<string, string> = {
+  "January": "Enero",
+  "February": "Febrero",
+  "March": "Marzo",
+  "April": "Abril",
+  "May": "Mayo",
+  "June": "Junio",
+  "July": "Julio",
+  "August": "Agosto",
+  "September": "Septiembre",
+  "October": "Octubre",
+  "November": "Noviembre",
+  "December": "Diciembre"
+};
+
 export function DashboardModule() {
+  const currentMonthString = getCurrentMonthString();
+  const defaultRange = getMonthDateRange(currentMonthString);
+
   const [sales, setSales] = useState<SaleTransaction[]>(INITIAL_OFFLINE_SALES);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>("En vivo");
@@ -243,13 +295,20 @@ export function DashboardModule() {
 
   // Filters State
   const [timeFilter, setTimeFilter] = useState<"total" | "mes" | "mes_anterior" | "ano" | "semana" | "rango">("mes");
-  const [selectedMonth, setSelectedMonth] = useState<string>("July 2026");
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthString);
   const [selectedWeek, setSelectedWeek] = useState<string>("all");
   const [selectedAdviser, setSelectedAdviser] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all"); // "all" | "upconta" | "firmas"
-  const [startDate, setStartDate] = useState<string>("2026-07-01");
-  const [endDate, setEndDate] = useState<string>("2026-07-31");
+  const [startDate, setStartDate] = useState<string>(defaultRange.start);
+  const [endDate, setEndDate] = useState<string>(defaultRange.end);
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  // Keep date range synced when selectedMonth changes
+  useEffect(() => {
+    const range = getMonthDateRange(selectedMonth);
+    setStartDate(range.start);
+    setEndDate(range.end);
+  }, [selectedMonth]);
 
   // Sub tab view inside dashboard
   const [activeViewTab, setActiveViewTab] = useState<"overview" | "producto" | "comisiones" | "detalle">("overview");
@@ -314,18 +373,18 @@ export function DashboardModule() {
       if (csvText) {
         const parsedSales = parseSalesCSV(csvText);
         if (parsedSales.length > 0) {
-          setSales(parsedSales.slice(0, 1000));
+          setSales(parsedSales.slice(0, 5000));
           setSyncStatus("success");
           return;
         }
       }
 
       // Default fallback to INITIAL_OFFLINE_SALES
-      setSales(INITIAL_OFFLINE_SALES);
+      setSales(INITIAL_OFFLINE_SALES.slice(0, 5000));
       setSyncStatus("success");
     } catch (error) {
       console.warn("Using offline dataset due to Google Sheets sync error:", error);
-      setSales(INITIAL_OFFLINE_SALES);
+      setSales(INITIAL_OFFLINE_SALES.slice(0, 5000));
       setSyncStatus("error");
     } finally {
       setIsLoading(false);
@@ -337,13 +396,13 @@ export function DashboardModule() {
     fetchGoogleSheetData();
   }, []);
 
-  // CSV Parser (up to 1000 records)
+  // CSV Parser (up to 5000 records)
   const parseSalesCSV = (csvText: string): SaleTransaction[] => {
     const lines = csvText.split("\n");
     const result: SaleTransaction[] = [];
 
     for (let i = 1; i < lines.length; i++) {
-      if (result.length >= 1000) break;
+      if (result.length >= 5000) break;
       const line = lines[i].trim();
       if (!line) continue;
 
@@ -443,6 +502,30 @@ export function DashboardModule() {
     sales.forEach(s => { if (s.mes) set.add(s.mes); });
     return Array.from(set).sort();
   }, [sales]);
+
+  const allAvailableMonthsOptions = useMemo(() => {
+    const monthsOrder = [
+      "January 2026", "February 2026", "March 2026", "April 2026",
+      "May 2026", "June 2026", "July 2026", "August 2026",
+      "September 2026", "October 2026", "November 2026", "December 2026"
+    ];
+    const set = new Set<string>([currentMonthString, ...allMonths, ...monthsOrder]);
+    const monthOrderMap: Record<string, number> = {
+      "January": 1, "February": 2, "March": 3, "April": 4,
+      "May": 5, "June": 6, "July": 7, "August": 8,
+      "September": 9, "October": 10, "November": 11, "December": 12
+    };
+    return Array.from(set).sort((a, b) => {
+      const partsA = a.split(" ");
+      const partsB = b.split(" ");
+      const yrA = parseInt(partsA[1] || "2026", 10);
+      const yrB = parseInt(partsB[1] || "2026", 10);
+      if (yrA !== yrB) return yrA - yrB;
+      const mA = monthOrderMap[partsA[0]] || 99;
+      const mB = monthOrderMap[partsB[0]] || 99;
+      return mA - mB;
+    });
+  }, [allMonths, currentMonthString]);
 
   // Month matching helper
   const matchMonthFilter = (item: SaleTransaction, monthFilterValue: string) => {
@@ -942,18 +1025,16 @@ export function DashboardModule() {
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none"
             >
-              <option value="July 2026">Julio 2026 (Actual)</option>
-              <option value="June 2026">Junio 2026</option>
-              <option value="May 2026">Mayo 2026</option>
-              <option value="April 2026">Abril 2026</option>
-              <option value="March 2026">Marzo 2026</option>
-              <option value="February 2026">Febrero 2026</option>
-              <option value="January 2026">Enero 2026</option>
-              <option value="August 2026">Agosto 2026</option>
-              <option value="September 2026">Septiembre 2026</option>
-              <option value="October 2026">Octubre 2026</option>
-              <option value="November 2026">Noviembre 2026</option>
-              <option value="December 2026">Diciembre 2026</option>
+              {allAvailableMonthsOptions.map((mStr) => {
+                const [mName, year] = mStr.split(" ");
+                const spanishName = MONTH_TRANSLATIONS[mName] || mName;
+                const isCurrent = mStr === currentMonthString;
+                return (
+                  <option key={mStr} value={mStr}>
+                    {spanishName} {year} {isCurrent ? "(Actual)" : ""}
+                  </option>
+                );
+              })}
               <option value="all_year">Todo el Año (2026)</option>
             </select>
           </div>
