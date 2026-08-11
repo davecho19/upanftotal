@@ -284,6 +284,14 @@ const MONTH_TRANSLATIONS: Record<string, string> = {
   "December": "Diciembre"
 };
 
+const getSpanishMonthLabel = (mStr: string): string => {
+  if (!mStr) return "";
+  if (mStr === "all_year") return "Todo el Año";
+  const [mName, year] = mStr.split(" ");
+  const spanishName = MONTH_TRANSLATIONS[mName] || mName;
+  return year ? `${spanishName} ${year}` : spanishName;
+};
+
 export function DashboardModule() {
   const currentMonthString = getCurrentMonthString();
   const defaultRange = getMonthDateRange(currentMonthString);
@@ -1584,11 +1592,15 @@ export function DashboardModule() {
                   onChange={(e) => setCompMonthA(e.target.value)}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900"
                 >
-                  <option value="June 2026">Junio 2026</option>
-                  <option value="July 2026">Julio 2026</option>
-                  <option value="May 2026">Mayo 2026</option>
-                  <option value="April 2026">Abril 2026</option>
-                  <option value="March 2026">Marzo 2026</option>
+                  {allAvailableMonthsOptions.map((mStr) => {
+                    const [mName, year] = mStr.split(" ");
+                    const spanishName = MONTH_TRANSLATIONS[mName] || mName;
+                    return (
+                      <option key={`a-${mStr}`} value={mStr}>
+                        {spanishName} {year}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1599,10 +1611,15 @@ export function DashboardModule() {
                   onChange={(e) => setCompMonthB(e.target.value)}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900"
                 >
-                  <option value="July 2026">Julio 2026</option>
-                  <option value="June 2026">Junio 2026</option>
-                  <option value="May 2026">Mayo 2026</option>
-                  <option value="April 2026">Abril 2026</option>
+                  {allAvailableMonthsOptions.map((mStr) => {
+                    const [mName, year] = mStr.split(" ");
+                    const spanishName = MONTH_TRANSLATIONS[mName] || mName;
+                    return (
+                      <option key={`b-${mStr}`} value={mStr}>
+                        {spanishName} {year}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1646,8 +1663,8 @@ export function DashboardModule() {
                     <YAxis tickFormatter={(v) => `$${v}`} tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
                     <Legend wrapperStyle={{ fontSize: "12px", fontWeight: "bold" }} />
-                    <Bar dataKey={compMonthA} name={compMonthA} fill="#0B2545" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey={compMonthB} name={compMonthB} fill="#F97316" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey={compMonthA} name={getSpanishMonthLabel(compMonthA)} fill="#0B2545" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey={compMonthB} name={getSpanishMonthLabel(compMonthB)} fill="#F97316" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1658,8 +1675,8 @@ export function DashboardModule() {
                   <thead className="bg-slate-900 text-white font-black uppercase text-[10px]">
                     <tr>
                       <th className="p-2.5">Métrica</th>
-                      <th className="p-2.5 text-right">{compMonthA}</th>
-                      <th className="p-2.5 text-right bg-orange-600">{compMonthB}</th>
+                      <th className="p-2.5 text-right">{getSpanishMonthLabel(compMonthA)}</th>
+                      <th className="p-2.5 text-right bg-orange-600">{getSpanishMonthLabel(compMonthB)}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-bold text-slate-800">
