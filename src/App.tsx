@@ -111,10 +111,23 @@ export default function App() {
   const [clientNotes, setClientNotes] = useState<string>(DEFAULT_CLIENT_NOTES);
   const [calcQuantity, setCalcQuantity] = useState<number>(1);
   
-  // Manual Advisor States (editable)
-  const [advisorName, setAdvisorName] = useState<string>("");
-  const [advisorEmail, setAdvisorEmail] = useState<string>("");
-  const [advisorPhone, setAdvisorPhone] = useState<string>("");
+  // Advisor States (with dropdown selection & manual edit)
+  const [selectedAdvisorKey, setSelectedAdvisorKey] = useState<string>("salome");
+  const [advisorName, setAdvisorName] = useState<string>(ASESORES_DATA.salome.nombre);
+  const [advisorEmail, setAdvisorEmail] = useState<string>(ASESORES_DATA.salome.correo);
+  const [advisorPhone, setAdvisorPhone] = useState<string>("0990388493");
+
+  const handleSelectAdvisorKey = (key: string) => {
+    setSelectedAdvisorKey(key);
+    if (key && ASESORES_DATA[key]) {
+      const info = ASESORES_DATA[key];
+      setAdvisorName(info.nombre);
+      setAdvisorEmail(info.correo);
+      const digits = info.telefono.replace(/\D/g, "");
+      const cleanDigits = digits.startsWith("593") ? "0" + digits.slice(3) : digits.slice(0, 10);
+      setAdvisorPhone(cleanDigits);
+    }
+  };
 
   // Selected electronic signature type tab state
   const [selectedSigType, setSelectedSigType] = useState<"PERSONA NATURAL" | "PERSONA NATURAL RUC" | "PERSONA JURIDICA" | "PROMO EMPRENDE">("PERSONA NATURAL");
@@ -796,9 +809,11 @@ export default function App() {
     const C_PRIMARY: [number, number, number] = hexToRgb(pdfBgColor);
     const C_SECONDARY: [number, number, number] = hexToRgb(pdfTitleColor);
     const C_TEXT_DIM: [number, number, number] = hexToRgb(pdfSubtitleColor);
-    const C_LIGHT_BG: [number, number, number] = [240, 246, 250];
+    const C_LIGHT_ROW: [number, number, number] = [245, 248, 251];
     const C_WHITE: [number, number, number] = [255, 255, 255];
     const C_BORDER: [number, number, number] = [180, 198, 211];
+    const C_GRID_BORDER: [number, number, number] = [203, 213, 225];
+    const C_DARK_TEXT: [number, number, number] = [15, 23, 42]; // Deep slate for 100% legibility on light fills
 
     // Compute contrast for dark vs light header fills to guarantee 100% legibility
     const primaryLuma = 0.299 * C_PRIMARY[0] + 0.587 * C_PRIMARY[1] + 0.114 * C_PRIMARY[2];
@@ -845,13 +860,13 @@ export default function App() {
     // Helper: Draw list key-values in summary
     const drawMetaItem = (lbl: string, val: string, x: number, y: number) => {
       pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(11);
-      pdf.setTextColor(...C_PRIMARY);
+      pdf.setFontSize(10.5);
+      pdf.setTextColor(...C_DARK_TEXT);
       pdf.text(lbl, x, y);
 
       pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(11);
-      pdf.setTextColor(...C_TEXT_DIM);
+      pdf.setFontSize(10.5);
+      pdf.setTextColor(51, 65, 85);
       pdf.text(val, x + pdf.getTextWidth(lbl) + 1.5, y);
     };
 
@@ -972,10 +987,6 @@ export default function App() {
 
     // Print active proposal plans
     if (selectedProposalPlans.length > 0) {
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(8.5);
-      pdf.setTextColor(...C_PRIMARY);
-
       selectedProposalPlans.forEach((p, idx) => {
         let cellX = MX;
         const unitPrice = p.precioPersonalizado !== null ? p.precioPersonalizado : p.precioBase;
@@ -988,14 +999,15 @@ export default function App() {
         ];
 
         cells.forEach((cell, cellIdx) => {
-          pdf.setFillColor(...C_LIGHT_BG);
-          pdf.setDrawColor(...C_PRIMARY);
+          pdf.setFillColor(...(idx % 2 === 1 ? C_LIGHT_ROW : C_WHITE));
+          pdf.setDrawColor(...C_GRID_BORDER);
           pdf.setLineWidth(0.2);
           const cw = colWidths[cellIdx];
           pdf.rect(cellX, tableY, cw, 7.5, "FD");
 
-          pdf.setTextColor(...C_PRIMARY);
+          pdf.setTextColor(...C_DARK_TEXT);
           pdf.setFont("helvetica", cellIdx === 0 ? "bold" : "normal");
+          pdf.setFontSize(8);
           const tX = cell.align === "right" ? cellX + cw - 2.5 : cell.align === "center" ? cellX + cw / 2 : cellX + 3;
           pdf.text(cell.text, tX, tableY + 4.8, { align: cell.align as "left" | "center" | "right" });
           cellX += cw;
@@ -1014,13 +1026,14 @@ export default function App() {
         ];
         discountCells.forEach((text, cellIdx) => {
           pdf.setFillColor(254, 242, 242); // soft red bg
-          pdf.setDrawColor(...C_PRIMARY);
+          pdf.setDrawColor(252, 165, 165);
           pdf.setLineWidth(0.2);
           const cw = colWidths[cellIdx];
           pdf.rect(cellX, tableY, cw, 7, "FD");
 
           pdf.setTextColor(185, 28, 28); // deep red text
           pdf.setFont("helvetica", cellIdx === 0 ? "bolditalic" : "bold");
+          pdf.setFontSize(8);
           const tX = cellIdx === 3 ? cellX + cw - 2.5 : cellIdx === 0 ? cellX + 3 : cellX + cw / 2;
           pdf.text(text, tX, tableY + 4.5, { align: cellIdx === 3 ? "right" : cellIdx === 0 ? "left" : "center" });
           cellX += cw;
@@ -1029,7 +1042,7 @@ export default function App() {
       }
     }
 
-    // Addons table rows (without "ADD-ON:" label)
+    // Addons table rows
     if (selectedAddons.length > 0) {
       selectedAddons.forEach((addon, idx) => {
         let cellX = MX;
@@ -1044,24 +1057,24 @@ export default function App() {
 
         cells.forEach((cell, cellIdx) => {
           const isOdd = idx % 2 === 1;
-          pdf.setFillColor(...(isOdd ? C_LIGHT_BG : [255, 255, 255] as [number, number, number]));
-          pdf.setDrawColor(...C_PRIMARY);
+          pdf.setFillColor(...(isOdd ? C_LIGHT_ROW : C_WHITE));
+          pdf.setDrawColor(...C_GRID_BORDER);
           pdf.setLineWidth(0.2);
           const cw = colWidths[cellIdx];
           pdf.rect(cellX, tableY, cw, 7.5, "FD");
 
-          pdf.setTextColor(...C_PRIMARY);
+          pdf.setTextColor(...C_DARK_TEXT);
           pdf.setFont("helvetica", cellIdx === 0 ? "bold" : "normal");
+          pdf.setFontSize(8);
           const tX = cell.align === "right" ? cellX + cw - 2.5 : cell.align === "center" ? cellX + cw / 2 : cellX + 3;
           pdf.text(cell.text, tX, tableY + 4.8, { align: cell.align as "left" | "center" | "right" });
           cellX += cw;
         });
         tableY += 7.5;
       });
-
     }
 
-    // Signatures table rows (without "FIRMA:" label)
+    // Signatures table rows
     if (selectedSignatures.length > 0) {
       selectedSignatures.forEach((sig, idx) => {
         let cellX = MX;
@@ -1079,14 +1092,15 @@ export default function App() {
 
         cells.forEach((cell, cellIdx) => {
           const isOdd = idx % 2 === 1;
-          pdf.setFillColor(...(isOdd ? C_LIGHT_BG : [255, 255, 255] as [number, number, number]));
-          pdf.setDrawColor(...C_PRIMARY);
+          pdf.setFillColor(...(isOdd ? C_LIGHT_ROW : C_WHITE));
+          pdf.setDrawColor(...C_GRID_BORDER);
           pdf.setLineWidth(0.2);
           const cw = colWidths[cellIdx];
           pdf.rect(cellX, tableY, cw, 7.5, "FD");
 
-          pdf.setTextColor(...C_PRIMARY);
+          pdf.setTextColor(...C_DARK_TEXT);
           pdf.setFont("helvetica", cellIdx === 0 ? "bold" : "normal");
+          pdf.setFontSize(8);
           const tX = cell.align === "right" ? cellX + cw - 2.5 : cell.align === "center" ? cellX + cw / 2 : cellX + 3;
           pdf.text(cell.text, tX, tableY + 4.8, { align: cell.align as "left" | "center" | "right" });
           cellX += cw;
@@ -1119,11 +1133,12 @@ export default function App() {
     const drawBoxLine = (label: string, value: string, isTotal = false) => {
       pdf.setFont("helvetica", isTotal ? "bold" : "normal");
       pdf.setFontSize(isTotal ? 9.5 : 8);
-      pdf.setTextColor(isTotal ? C_SECONDARY[0] : C_PRIMARY[0], isTotal ? C_SECONDARY[1] : C_PRIMARY[1], isTotal ? C_SECONDARY[2] : C_PRIMARY[2]);
+      pdf.setTextColor(...(isTotal ? C_DARK_TEXT : [51, 65, 85] as [number, number, number]));
       pdf.text(label, boxX + 3, boxLineY);
       
       pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(isTotal ? 10.5 : 8);
+      pdf.setFontSize(isTotal ? 10.5 : 8.5);
+      pdf.setTextColor(...C_DARK_TEXT);
       pdf.text(value, boxX + boxW - 3, boxLineY, { align: "right" });
       boxLineY += 5.5;
     };
@@ -1167,7 +1182,7 @@ export default function App() {
     pdf.setTextColor(...C_BANNER_PRICE);
     pdf.text(`$${grandTotal.toFixed(2)}`, boxX + boxW - 4, tableY - 4, { align: "right" });
 
-    // 6. Client Notes block if present (rendered as full width framed box with cyan border & cream background matching layout)
+    // 6. Client Notes block if present
     let nextY = tableY + 11;
     if (clientNotes.trim()) {
       const noteText = clientNotes.trim();
@@ -1179,14 +1194,14 @@ export default function App() {
       const boxHeight = 11 + (noteLines.length * lineHeight);
 
       pdf.setFillColor(254, 252, 232); // light cream background
-      pdf.setDrawColor(56, 189, 248); // sky cyan border matching image
+      pdf.setDrawColor(234, 179, 8); // amber border
       pdf.setLineWidth(0.4);
 
       pdf.roundedRect(MX, nextY, PAGE_W - 2 * MX, boxHeight, 2, 2, "FD");
 
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(9.5);
-      pdf.setTextColor(15, 23, 42); // dark navy/black
+      pdf.setTextColor(15, 23, 42);
       pdf.text("NOTA:", MX + 5, nextY + 5.5);
 
       pdf.setFont("helvetica", "normal");
@@ -1206,12 +1221,12 @@ export default function App() {
     // Left Column: Advisor name and title
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(13);
-    pdf.setTextColor(...C_SECONDARY);
+    pdf.setTextColor(...C_PRIMARY);
     pdf.text(advisorName.toUpperCase(), MX + 3, footerY + 2);
     
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9.5);
-    pdf.setTextColor(...C_TEXT_DIM);
+    pdf.setTextColor(71, 85, 105);
     pdf.text("Comercial Corporativo", MX + 3, footerY + 7);
 
     // Vertical Divider
@@ -1222,14 +1237,13 @@ export default function App() {
     // Right Column: Phone and email
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(11.5);
-    pdf.setTextColor(...C_PRIMARY);
+    pdf.setTextColor(...C_DARK_TEXT);
     pdf.text(advisorPhone || "Contacto Corporativo", PAGE_W / 2 + 10, footerY + 2);
 
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9.5);
-    pdf.setTextColor(...C_TEXT_DIM);
+    pdf.setTextColor(71, 85, 105);
     pdf.text(advisorEmail || "", PAGE_W / 2 + 10, footerY + 7);
-
 
     // ----------------- PAGE 2: TECHNICAL DETAILS -----------------
     pdf.addPage();
@@ -1360,9 +1374,9 @@ export default function App() {
       const x = MX + colIdx * (colW + colGap);
 
       // Draw single module card
-      pdf.setDrawColor(...C_PRIMARY);
+      pdf.setDrawColor(...C_GRID_BORDER);
       pdf.setLineWidth(0.25);
-      pdf.setFillColor(...C_LIGHT_BG);
+      pdf.setFillColor(248, 250, 252);
       pdf.roundedRect(x, cardY, colW, 60, 1.5, 1.5, "FD");
 
       // Module header
@@ -1374,10 +1388,6 @@ export default function App() {
       pdf.text(`MÓDULO ${modName}`, x + colW / 2, cardY + 4.5, { align: "center" });
 
       // Submodules list inside card
-      pdf.setTextColor(...C_PRIMARY);
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(6.8);
-
       const subList = DETALLE_SUBMODULOS[modName] || [];
       let itemY = cardY + 11;
 
@@ -1385,14 +1395,16 @@ export default function App() {
         if (itemText.startsWith("##")) {
           // Section header inside card
           pdf.setFont("helvetica", "bold");
-          pdf.setTextColor(...C_SECONDARY);
+          pdf.setFontSize(7);
+          pdf.setTextColor(...C_PRIMARY);
           pdf.text(itemText.replace("##", "").toUpperCase(), x + 3, itemY);
-          pdf.setFont("helvetica", "normal");
         } else {
           // Bullet point
-          pdf.setFillColor(...C_SECONDARY);
+          pdf.setFillColor(...C_PRIMARY);
           pdf.circle(x + 3.5, itemY - 1, 0.45, "F");
-          pdf.setTextColor(...C_PRIMARY);
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(6.8);
+          pdf.setTextColor(30, 41, 59); // Crisp dark text
           pdf.text(itemText, x + 5.5, itemY);
         }
         itemY += 4.1;
@@ -2392,12 +2404,36 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Commercial Advisor assignment (Manual fields) */}
+              {/* Commercial Advisor assignment */}
               <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-slate-750 flex items-center gap-2">
-                  <User className="w-4 h-4 text-[#0B2545]" />
-                  Información del Asesor Comercial
-                </h4>
+                <div className="flex justify-between items-center flex-wrap gap-2">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-slate-700 flex items-center gap-2">
+                    <User className="w-4 h-4 text-[#0B2545]" />
+                    Información del Asesor Comercial
+                  </h4>
+                  <span className="text-[10px] text-slate-500 font-medium">Carga rápida o edición manual</span>
+                </div>
+
+                {/* Quick Advisor Dropdown */}
+                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#0B2545] block mb-1.5 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-[#0B2545]" />
+                    <span>Seleccionar Asesor Predefinido de UpConta:</span>
+                  </label>
+                  <select
+                    value={selectedAdvisorKey}
+                    onChange={(e) => handleSelectAdvisorKey(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#0B2545] cursor-pointer"
+                  >
+                    <option value="">-- Selecciona un Asesor para Autocompletar --</option>
+                    {Object.entries(ASESORES_DATA).map(([key, as]) => (
+                      <option key={key} value={key}>
+                        {as.nombre} - {as.correo} ({as.telefono})
+                      </option>
+                    ))}
+                    <option value="custom">Otro (Ingreso manual)</option>
+                  </select>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="flex flex-col gap-1.5">
