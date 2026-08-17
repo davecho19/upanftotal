@@ -586,10 +586,25 @@ export function DashboardModule() {
   };
 
   // State for 4th Comparative Month module
+  const [compFilterMode, setCompFilterMode] = useState<"mes_semana" | "rango_fechas">("mes_semana");
   const [compMonthA, setCompMonthA] = useState<string>("June 2026");
   const [compMonthB, setCompMonthB] = useState<string>("July 2026");
   const [compWeek, setCompWeek] = useState<string>("all");
   const [compCategory, setCompCategory] = useState<string>("all");
+  const [compStartDateA, setCompStartDateA] = useState<string>("2026-06-01");
+  const [compEndDateA, setCompEndDateA] = useState<string>("2026-06-30");
+  const [compStartDateB, setCompStartDateB] = useState<string>("2026-07-01");
+  const [compEndDateB, setCompEndDateB] = useState<string>("2026-07-31");
+
+  // Keep comparative date ranges synced when compMonthA or compMonthB changes
+  useEffect(() => {
+    const rA = getMonthDateRange(compMonthA);
+    const rB = getMonthDateRange(compMonthB);
+    setCompStartDateA(rA.start);
+    setCompEndDateA(rA.end);
+    setCompStartDateB(rB.start);
+    setCompEndDateB(rB.end);
+  }, [compMonthA, compMonthB]);
 
   // 1. Sales dataset strictly for CHARTS and REPORTE COMISIONES (Only affected by MES filter)
   const salesForChartsAndCommissions = useMemo(() => {
@@ -798,14 +813,14 @@ export function DashboardModule() {
     return weeks;
   }, [salesForChartsAndCommissions]);
 
-  // 4th COMPARATIVE MODULE BETWEEN MONTHS
+  // 4th COMPARATIVE MODULE BETWEEN MONTHS, WEEKS AND DATE RANGES
   const comparativeMetrics = useMemo(() => {
-    const filterFn = (item: SaleTransaction, targetMonth: string) => {
-      if (!matchMonthFilter(item, targetMonth)) return false;
-      if (compWeek !== "all") {
-        const wInfo = getFridayToThursdayWeek(item.fecha);
-        if (wInfo.weekNumber !== parseInt(compWeek, 10)) return false;
-      }
+    let salesA: SaleTransaction[] = [];
+    let salesB: SaleTransaction[] = [];
+    let labelA = "";
+    let labelB = "";
+
+    const matchesCategory = (item: SaleTransaction) => {
       if (compCategory !== "all") {
         const isUp = isUpContaSale(item);
         if (compCategory === "upconta" && !isUp) return false;
@@ -814,8 +829,48 @@ export function DashboardModule() {
       return true;
     };
 
-    const salesA = sales.filter(s => filterFn(s, compMonthA));
-    const salesB = sales.filter(s => filterFn(s, compMonthB));
+    if (compFilterMode === "mes_semana") {
+      labelA = `${getSpanishMonthLabel(compMonthA)}${compWeek !== "all" ? ` (Sem ${compWeek})` : ""}`;
+      labelB = `${getSpanishMonthLabel(compMonthB)}${compWeek !== "all" ? ` (Sem ${compWeek})` : ""}`;
+
+      const filterFn = (item: SaleTransaction, targetMonth: string) => {
+        if (!matchesCategory(item)) return false;
+        if (!matchMonthFilter(item, targetMonth)) return false;
+        if (compWeek !== "all") {
+          const wInfo = getFridayToThursdayWeek(item.fecha);
+          if (wInfo.weekNumber !== parseInt(compWeek, 10)) return false;
+        }
+        return true;
+      };
+
+      salesA = sales.filter(s => filterFn(s, compMonthA));
+      salesB = sales.filter(s => filterFn(s, compMonthB));
+    } else {
+      // Custom Date Range Comparison
+      const formatDisplayDate = (dStr: string) => {
+        if (!dStr) return "";
+        const [y, m, d] = dStr.split("-");
+        return `${d}/${m}/${y}`;
+      };
+
+      labelA = compStartDateA && compEndDateA
+        ? `Rango A (${formatDisplayDate(compStartDateA)} - ${formatDisplayDate(compEndDateA)})`
+        : "Período A";
+      labelB = compStartDateB && compEndDateB
+        ? `Rango B (${formatDisplayDate(compStartDateB)} - ${formatDisplayDate(compEndDateB)})`
+        : "Período B";
+
+      const filterRange = (item: SaleTransaction, start: string, end: string) => {
+        if (!matchesCategory(item)) return false;
+        const f = item.fecha || "";
+        if (start && f < start) return false;
+        if (end && f > end) return false;
+        return true;
+      };
+
+      salesA = sales.filter(s => filterRange(s, compStartDateA, compEndDateA));
+      salesB = sales.filter(s => filterRange(s, compStartDateB, compEndDateB));
+    }
 
     const getStats = (salesList: SaleTransaction[]) => {
       const up = salesList.filter(isUpContaSale);
@@ -843,27 +898,46 @@ export function DashboardModule() {
     const statsB = getStats(salesB);
 
     return {
+      labelA,
+      labelB,
       statsA,
       statsB,
       chartData: [
         {
           metric: "UpConta ($)",
+          periodoA: statsA.totalUpMonto,
+          periodoB: statsB.totalUpMonto,
           [compMonthA]: statsA.totalUpMonto,
           [compMonthB]: statsB.totalUpMonto
         },
         {
           metric: "Firmas.ec ($)",
+          periodoA: statsA.totalFirMonto,
+          periodoB: statsB.totalFirMonto,
           [compMonthA]: statsA.totalFirMonto,
           [compMonthB]: statsB.totalFirMonto
         },
         {
           metric: "Ventas Totales ($)",
+          periodoA: statsA.totalMonto,
+          periodoB: statsB.totalMonto,
           [compMonthA]: statsA.totalMonto,
           [compMonthB]: statsB.totalMonto
         }
       ]
     };
-  }, [sales, compMonthA, compMonthB, compWeek, compCategory]);
+  }, [
+    sales,
+    compFilterMode,
+    compMonthA,
+    compMonthB,
+    compWeek,
+    compCategory,
+    compStartDateA,
+    compEndDateA,
+    compStartDateB,
+    compEndDateB
+  ]);
 
   // Dynamic Table 1: Reporte por Producto Table (Sorted FIRMAS first, UPCONTA second)
   const dynamicReportProduct = useMemo(() => {
@@ -1566,91 +1640,203 @@ export function DashboardModule() {
             </div>
           </div>
 
-          {/* ================= 4TO GRÁFICO / MÓDULO: COMPARATIVO ENTRE MESES Y SEMANAS ================= */}
+          {/* ================= 4TO GRÁFICO / MÓDULO: COMPARATIVO ENTRE MESES, SEMANAS Y RANGOS ================= */}
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-6 pt-6 border-t-2 border-t-orange-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-blue-600" />
-                  4. Módulo Comparativo entre Meses y Semanas
+                  4. Módulo Comparativo Dinámico (Meses, Semanas y Rangos de Fechas)
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Selecciona dos meses distintos y filtra por semana o línea de producto para comparar rendimiento directo.
+                  Compara el rendimiento comercial entre dos períodos: por meses calendario con desglose semanal o especificando rangos de fechas exactos.
                 </p>
               </div>
-              <span className="bg-blue-50 text-blue-900 font-extrabold text-xs px-3 py-1 rounded-full border border-blue-200">
-                Comparativa Dinámica
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="bg-blue-50 text-blue-900 font-extrabold text-xs px-3 py-1 rounded-full border border-blue-200">
+                  {compFilterMode === "mes_semana" ? "Comparativa por Mes/Semana" : "Comparativa por Rangos de Fecha"}
+                </span>
+              </div>
             </div>
 
             {/* Controls for 4th Comparative Module */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700">Mes A (Base)</label>
-                <select
-                  value={compMonthA}
-                  onChange={(e) => setCompMonthA(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900"
-                >
-                  {allAvailableMonthsOptions.map((mStr) => {
-                    const [mName, year] = mStr.split(" ");
-                    const spanishName = MONTH_TRANSLATIONS[mName] || mName;
-                    return (
-                      <option key={`a-${mStr}`} value={mStr}>
-                        {spanishName} {year}
-                      </option>
-                    );
-                  })}
-                </select>
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+              {/* Row 1: Mode Switcher & Category selector */}
+              <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 border-b border-slate-200/80 pb-3">
+                <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setCompFilterMode("mes_semana")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      compFilterMode === "mes_semana"
+                        ? "bg-[#0B2545] text-white shadow-xs"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                    }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Por Meses y Semanas</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCompFilterMode("rango_fechas")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      compFilterMode === "rango_fechas"
+                        ? "bg-orange-500 text-white shadow-xs"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Por Rangos de Fechas</span>
+                  </button>
+                </div>
+
+                {/* Línea de Producto Filter */}
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] font-bold text-slate-700 whitespace-nowrap">Línea de Producto:</label>
+                  <select
+                    value={compCategory}
+                    onChange={(e) => setCompCategory(e.target.value)}
+                    className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#0B2545]"
+                  >
+                    <option value="all">Ambas Líneas</option>
+                    <option value="upconta">Solo UpConta</option>
+                    <option value="firmas">Solo Firmas.ec</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700">Mes B (Comparar)</label>
-                <select
-                  value={compMonthB}
-                  onChange={(e) => setCompMonthB(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900"
-                >
-                  {allAvailableMonthsOptions.map((mStr) => {
-                    const [mName, year] = mStr.split(" ");
-                    const spanishName = MONTH_TRANSLATIONS[mName] || mName;
-                    return (
-                      <option key={`b-${mStr}`} value={mStr}>
-                        {spanishName} {year}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
+              {/* Row 2: Dynamic Controls based on selected mode */}
+              {compFilterMode === "mes_semana" ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-[#0B2545]"></span>
+                      Mes A (Base)
+                    </label>
+                    <select
+                      value={compMonthA}
+                      onChange={(e) => setCompMonthA(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#0B2545]"
+                    >
+                      {allAvailableMonthsOptions.map((mStr) => {
+                        const [mName, year] = mStr.split(" ");
+                        const spanishName = MONTH_TRANSLATIONS[mName] || mName;
+                        return (
+                          <option key={`a-${mStr}`} value={mStr}>
+                            {spanishName} {year}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700">Filtrar por Semana</label>
-                <select
-                  value={compWeek}
-                  onChange={(e) => setCompWeek(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900"
-                >
-                  <option value="all">Todas las Semanas</option>
-                  <option value="1">Semana 1</option>
-                  <option value="2">Semana 2</option>
-                  <option value="3">Semana 3</option>
-                  <option value="4">Semana 4</option>
-                  <option value="5">Semana 5</option>
-                </select>
-              </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
+                      Mes B (Comparar)
+                    </label>
+                    <select
+                      value={compMonthB}
+                      onChange={(e) => setCompMonthB(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-orange-500"
+                    >
+                      {allAvailableMonthsOptions.map((mStr) => {
+                        const [mName, year] = mStr.split(" ");
+                        const spanishName = MONTH_TRANSLATIONS[mName] || mName;
+                        return (
+                          <option key={`b-${mStr}`} value={mStr}>
+                            {spanishName} {year}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700">Línea de Producto</label>
-                <select
-                  value={compCategory}
-                  onChange={(e) => setCompCategory(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900"
-                >
-                  <option value="all">Ambas Líneas</option>
-                  <option value="upconta">Solo UpConta</option>
-                  <option value="firmas">Solo Firmas.ec</option>
-                </select>
-              </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700">Filtrar por Semana</label>
+                    <select
+                      value={compWeek}
+                      onChange={(e) => setCompWeek(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
+                    >
+                      <option value="all">Todas las Semanas</option>
+                      <option value="1">Semana 1 (Vie a Jue)</option>
+                      <option value="2">Semana 2 (Vie a Jue)</option>
+                      <option value="3">Semana 3 (Vie a Jue)</option>
+                      <option value="4">Semana 4 (Vie a Jue)</option>
+                      <option value="5">Semana 5 (Vie a Jue)</option>
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                /* Date Range Mode Controls */
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Período A */}
+                    <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-[#0B2545] flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#0B2545]"></span>
+                          Período A (Base)
+                        </label>
+                        <span className="text-[10px] text-slate-500 font-medium">Desde - Hasta</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-500 block mb-0.5">Fecha Inicio:</label>
+                          <input
+                            type="date"
+                            value={compStartDateA}
+                            onChange={(e) => setCompStartDateA(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#0B2545]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500 block mb-0.5">Fecha Fin:</label>
+                          <input
+                            type="date"
+                            value={compEndDateA}
+                            onChange={(e) => setCompEndDateA(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#0B2545]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Período B */}
+                    <div className="bg-white p-3 rounded-xl border border-orange-200 bg-orange-50/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-orange-600 flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                          Período B (Comparar)
+                        </label>
+                        <span className="text-[10px] text-slate-500 font-medium">Desde - Hasta</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-500 block mb-0.5">Fecha Inicio:</label>
+                          <input
+                            type="date"
+                            value={compStartDateB}
+                            onChange={(e) => setCompStartDateB(e.target.value)}
+                            className="w-full bg-slate-50 border border-orange-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500 block mb-0.5">Fecha Fin:</label>
+                          <input
+                            type="date"
+                            value={compEndDateB}
+                            onChange={(e) => setCompEndDateB(e.target.value)}
+                            className="w-full bg-slate-50 border border-orange-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Visual Bar Chart Comparison */}
@@ -1661,10 +1847,10 @@ export function DashboardModule() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="metric" tick={{ fontSize: 11, fontWeight: "bold" }} />
                     <YAxis tickFormatter={(v) => `$${v}`} tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
+                    <Tooltip formatter={(v: any, name: any) => [formatCurrency(Number(v)), name]} />
                     <Legend wrapperStyle={{ fontSize: "12px", fontWeight: "bold" }} />
-                    <Bar dataKey={compMonthA} name={getSpanishMonthLabel(compMonthA)} fill="#0B2545" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey={compMonthB} name={getSpanishMonthLabel(compMonthB)} fill="#F97316" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="periodoA" name={comparativeMetrics.labelA} fill="#0B2545" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="periodoB" name={comparativeMetrics.labelB} fill="#F97316" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1675,8 +1861,8 @@ export function DashboardModule() {
                   <thead className="bg-slate-900 text-white font-black uppercase text-[10px]">
                     <tr>
                       <th className="p-2.5">Métrica</th>
-                      <th className="p-2.5 text-right">{getSpanishMonthLabel(compMonthA)}</th>
-                      <th className="p-2.5 text-right bg-orange-600">{getSpanishMonthLabel(compMonthB)}</th>
+                      <th className="p-2.5 text-right">{comparativeMetrics.labelA}</th>
+                      <th className="p-2.5 text-right bg-orange-600">{comparativeMetrics.labelB}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-bold text-slate-800">
