@@ -46,7 +46,8 @@ import {
   Zap,
   Flame,
   BarChart3,
-  Landmark
+  Landmark,
+  Printer
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -523,19 +524,22 @@ export default function App() {
 
   // Default base price calculation for currently selected dropdown plan
   let defaultBasePrice = 0;
-  let cycleLabel = "/mes";
+  let cycleLabel = "/anual";
   if (viewedPlanObj) {
     if (tipoPlan === "erp") {
       if (billingCycle === "annual") {
         defaultBasePrice = viewedPlanObj.precioAnual || (viewedPlanObj.precio * 12);
-        cycleLabel = "/año";
+        cycleLabel = "/anual";
       } else {
         defaultBasePrice = viewedPlanObj.precio;
         cycleLabel = "/mes";
       }
+    } else if (tipoPlan === "cloud") {
+      defaultBasePrice = viewedPlanObj.precioAnual || viewedPlanObj.precio;
+      cycleLabel = "/anual";
     } else {
       defaultBasePrice = viewedPlanObj.precio;
-      cycleLabel = "/mes";
+      cycleLabel = "/anual";
     }
   }
 
@@ -545,15 +549,21 @@ export default function App() {
     if (!planToUse) return;
 
     let defaultPrice = planToUse.precio;
-    let cycleLbl = "/mes";
+    let cycleLbl = "/anual";
     if (tipoPlan === "erp") {
       if (billingCycle === "annual") {
         defaultPrice = planToUse.precioAnual || (planToUse.precio * 12);
-        cycleLbl = "/año";
+        cycleLbl = "/anual";
       } else {
         defaultPrice = planToUse.precio;
         cycleLbl = "/mes";
       }
+    } else if (tipoPlan === "cloud") {
+      defaultPrice = planToUse.precioAnual || planToUse.precio;
+      cycleLbl = "/anual";
+    } else {
+      defaultPrice = planToUse.precio;
+      cycleLbl = "/anual";
     }
 
     const priceToUse = customPlanPrice !== null ? customPlanPrice : defaultPrice;
@@ -791,6 +801,378 @@ export default function App() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  // OFFICIAL TECHNICAL SHEET PDF GENERATION (FICHA TÉCNICA OFICIAL DE PLAN - UPCONTA)
+  const handleGenerarFichaPlanPDF = (planToPrint?: Plan | null, conPrecio: boolean = true) => {
+    const plan = planToPrint || viewedPlanObj;
+    if (!plan) return;
+
+    const pdf = new jsPDF("p", "mm", "a4");
+    const PAGE_W = 210;
+    const PAGE_H = 297;
+    const MX = 14;
+    const CONTENT_W = PAGE_W - (MX * 2); // 182mm
+
+    // Draw clean white background
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, PAGE_W, PAGE_H, "F");
+
+    // Top Header: UpConta Logo on Left
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 520;
+      canvas.height = 130;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, 520, 130);
+        ctx.font = "900 102px system-ui, -apple-system, BlinkMacSystemFont, 'Montserrat', sans-serif";
+        ctx.fillStyle = "#FF5500";
+        ctx.fillText("Up", 10, 92);
+
+        ctx.fillStyle = "#0B2545";
+        ctx.fillText("Conta", 152, 92);
+
+        ctx.save();
+        ctx.translate(426, 12);
+        ctx.strokeStyle = "#FF5500";
+        ctx.lineWidth = 18;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        ctx.beginPath();
+        ctx.moveTo(12, 50);
+        ctx.lineTo(52, 50);
+        ctx.arcTo(68, 50, 68, 34, 16);
+        ctx.lineTo(68, 10);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(50, 22);
+        ctx.lineTo(68, 4);
+        ctx.lineTo(86, 22);
+        ctx.stroke();
+        ctx.restore();
+
+        const logoData = canvas.toDataURL("image/png");
+        pdf.addImage(logoData, "PNG", MX, 11, 48, 12);
+      }
+    } catch (e) {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(22);
+      pdf.setTextColor(255, 85, 0);
+      pdf.text("Up", MX, 21);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text("Conta", MX + 12, 21);
+    }
+
+    // Top Header: Right aligned Official Title
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("FICHA TÉCNICA OFICIAL DE PLAN", PAGE_W - MX, 14, { align: "right" });
+
+    pdf.setFontSize(15);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text(plan.nombre.toUpperCase(), PAGE_W - MX, 20.5, { align: "right" });
+
+    const todayFormatted = new Date().toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" });
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(`UPCONTA • ECUADOR • ${todayFormatted}`, PAGE_W - MX, 25.5, { align: "right" });
+
+    // Blue Accent separator line
+    pdf.setDrawColor(11, 37, 69);
+    pdf.setLineWidth(0.7);
+    pdf.line(MX, 28.5, PAGE_W - MX, 28.5);
+
+    // ==========================================
+    // 2 TOP BOXES SIDE BY SIDE (y = 32)
+    // ==========================================
+    const boxTopY = 32;
+    const boxW = (CONTENT_W - 6) / 2; // 88mm
+    const boxH = 43;
+    const box1X = MX;
+    const box2X = MX + boxW + 6;
+
+    const metrics = extractQuickMetrics(plan.modulos);
+
+    // BOX 1: ESPECIFICACIONES & LÍMITES
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(box1X, boxTopY, boxW, 6.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("ESPECIFICACIONES & LÍMITES", box1X + (boxW / 2), boxTopY + 4.5, { align: "center" });
+
+    // Border
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.3);
+    pdf.rect(box1X, boxTopY, boxW, boxH, "S");
+
+    // Spec Rows
+    const specRows = [
+      { label: "Plan:", value: plan.nombre },
+      { label: "Categoría / Tier:", value: plan.tier.toUpperCase() },
+      { label: "Comprobantes SRI:", value: metrics.comprobantes || (plan.comprobantes || "Comprobantes Ilimitados") },
+      { label: "Usuarios Habilitados:", value: metrics.usuarios || (plan.usuarios || "1 Usuario") },
+      { label: "Límite Empresas / RUC:", value: plan.ruc ? `${plan.ruc} Empresas` : (metrics.empresas || "1 Empresa") }
+    ];
+
+    let rowY = boxTopY + 11.5;
+    specRows.forEach((r, idx) => {
+      if (idx % 2 === 1) {
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(box1X + 0.5, rowY - 3.5, boxW - 1, 6.8, "F");
+      }
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text(r.label, box1X + 3.5, rowY);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text(r.value, box1X + boxW - 3.5, rowY, { align: "right" });
+
+      rowY += 7;
+    });
+
+    // BOX 2: DESGLOSE FINANCIERO OFICIAL (or COMERCIAL)
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(box2X, boxTopY, boxW, 6.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(conPrecio ? "DESGLOSE FINANCIERO OFICIAL" : "DESGLOSE COMERCIAL OFICIAL", box2X + (boxW / 2), boxTopY + 4.5, { align: "center" });
+
+    // Border
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.3);
+    pdf.rect(box2X, boxTopY, boxW, boxH, "S");
+
+    const isMonthly = tipoPlan === "erp" && billingCycle === "monthly";
+    const basePrice = isMonthly ? plan.precio : (tipoPlan === "erp" ? (plan.precioAnual || plan.precio * 12) : (plan.precioAnual || plan.precio));
+    const modalidad = isMonthly ? "Pago Mensual" : "Pago Anual";
+    const iva = basePrice * 0.15;
+    const total = basePrice + iva;
+
+    if (conPrecio) {
+      const finRows = [
+        { label: "Precio Base Plan:", value: `$${basePrice.toFixed(2)} USD` },
+        { label: "Modalidad de Pago:", value: modalidad },
+        { label: "IVA Ecuador (15%):", value: `$${iva.toFixed(2)} USD` }
+      ];
+
+      let finY = boxTopY + 13;
+      finRows.forEach((r, idx) => {
+        if (idx % 2 === 1) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(box2X + 0.5, finY - 3.5, boxW - 1, 7.5, "F");
+        }
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(11, 37, 69);
+        pdf.text(r.label, box2X + 3.5, finY);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(30, 41, 59);
+        pdf.text(r.value, box2X + boxW - 3.5, finY, { align: "right" });
+
+        finY += 7.5;
+      });
+
+      // Highlight Total Bar at bottom of box 2
+      const totalBarY = boxTopY + boxH - 7.5;
+      pdf.setFillColor(11, 37, 69);
+      pdf.rect(box2X, totalBarY, boxW, 7.5, "F");
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("TOTAL ESTIMADO CON IVA", box2X + 3.5, totalBarY + 5);
+
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(251, 191, 36); // Yellow accent
+      pdf.text(`$${total.toFixed(2)} USD`, box2X + boxW - 3.5, totalBarY + 5, { align: "right" });
+    } else {
+      const comRows = [
+        { label: "Modalidad de Pago:", value: modalidad },
+        { label: "Disponibilidad:", value: "Inmediata (100% Cloud)" },
+        { label: "Cotización Comercial:", value: "Consultar con Asesor" }
+      ];
+
+      let finY = boxTopY + 13;
+      comRows.forEach((r, idx) => {
+        if (idx % 2 === 1) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(box2X + 0.5, finY - 3.5, boxW - 1, 7.5, "F");
+        }
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(11, 37, 69);
+        pdf.text(r.label, box2X + 3.5, finY);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(30, 41, 59);
+        pdf.text(r.value, box2X + boxW - 3.5, finY, { align: "right" });
+
+        finY += 7.5;
+      });
+
+      const totalBarY = boxTopY + boxH - 7.5;
+      pdf.setFillColor(11, 37, 69);
+      pdf.rect(box2X, totalBarY, boxW, 7.5, "F");
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("ALCANCE Y COBERTURA", box2X + 3.5, totalBarY + 5);
+
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(251, 191, 36);
+      pdf.text("UPCONTA ECUADOR", box2X + boxW - 3.5, totalBarY + 5, { align: "right" });
+    }
+
+    // ==========================================
+    // SECTION BELOW: DESGLOSE DE MÓDULOS TRONCALES
+    // ==========================================
+    const modSectionY = boxTopY + boxH + 5; // ~80mm
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(MX, modSectionY, CONTENT_W, 6.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(`DESGLOSE DE MÓDULOS TRONCALES INCLUIDOS EN EL PLAN (${plan.nombre.toUpperCase()})`, PAGE_W / 2, modSectionY + 4.5, { align: "center" });
+
+    const modulosList = MODULOS_POR_TIER[plan.tier] || ["ADMINISTRATIVO", "PRODUCCIÓN"];
+    const contentStartY = modSectionY + 9;
+
+    if (modulosList.length <= 2) {
+      // 2 Wide Columns
+      const colW = (CONTENT_W - 5) / 2; // ~88.5mm
+      modulosList.forEach((modName, idx) => {
+        const colX = MX + (idx * (colW + 5));
+        const subList = DETALLE_SUBMODULOS[modName] || [];
+
+        // Header pill
+        pdf.setFillColor(11, 37, 69);
+        pdf.rect(colX, contentStartY, colW, 5.5, "F");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), contentStartY + 3.8, { align: "center" });
+
+        // Items container
+        let subY = contentStartY + 9.5;
+        subList.forEach((subItem) => {
+          const cleanItem = subItem.replace(/^##/, "").trim();
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(6.8);
+          pdf.setTextColor(30, 41, 59);
+          pdf.text(`• ${cleanItem}`, colX + 3, subY);
+          subY += 4.5;
+        });
+
+        // Box border
+        const totalBoxH = Math.max(subY - contentStartY + 2, 70);
+        pdf.setDrawColor(203, 213, 225);
+        pdf.setLineWidth(0.3);
+        pdf.rect(colX, contentStartY, colW, totalBoxH, "S");
+      });
+    } else if (modulosList.length === 3) {
+      // 3 Columns
+      const colW = (CONTENT_W - 6) / 3; // ~58mm
+      modulosList.forEach((modName, idx) => {
+        const colX = MX + (idx * (colW + 3));
+        const subList = DETALLE_SUBMODULOS[modName] || [];
+
+        pdf.setFillColor(11, 37, 69);
+        pdf.rect(colX, contentStartY, colW, 5.5, "F");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(6.8);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), contentStartY + 3.8, { align: "center" });
+
+        let subY = contentStartY + 9.5;
+        subList.forEach((subItem) => {
+          const cleanItem = subItem.replace(/^##/, "").trim();
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(6.5);
+          pdf.setTextColor(30, 41, 59);
+          pdf.text(`• ${cleanItem}`, colX + 2.5, subY);
+          subY += 4.2;
+        });
+
+        const totalBoxH = Math.max(subY - contentStartY + 2, 70);
+        pdf.setDrawColor(203, 213, 225);
+        pdf.setLineWidth(0.3);
+        pdf.rect(colX, contentStartY, colW, totalBoxH, "S");
+      });
+    } else {
+      // 4 or more modules: 3 Columns Grid with vertical packing
+      const colW = (CONTENT_W - 6) / 3;
+      const colPositions = [MX, MX + colW + 3, MX + (colW * 2) + 6];
+      const colYTracker = [contentStartY, contentStartY, contentStartY];
+
+      modulosList.forEach((modName) => {
+        let targetCol = 0;
+        if (colYTracker[1] < colYTracker[targetCol]) targetCol = 1;
+        if (colYTracker[2] < colYTracker[targetCol]) targetCol = 2;
+
+        const colX = colPositions[targetCol];
+        const cardStartY = colYTracker[targetCol];
+        const subList = DETALLE_SUBMODULOS[modName] || [];
+
+        pdf.setFillColor(11, 37, 69);
+        pdf.rect(colX, cardStartY, colW, 5, "F");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(6.5);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), cardStartY + 3.5, { align: "center" });
+
+        let subY = cardStartY + 8.5;
+        subList.forEach((subItem) => {
+          const cleanItem = subItem.replace(/^##/, "").trim();
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(6);
+          pdf.setTextColor(30, 41, 59);
+          pdf.text(`• ${cleanItem}`, colX + 2, subY);
+          subY += 3.4;
+        });
+
+        const cardH = subY - cardStartY + 1.5;
+        pdf.setDrawColor(203, 213, 225);
+        pdf.setLineWidth(0.3);
+        pdf.rect(colX, cardStartY, colW, cardH, "S");
+
+        colYTracker[targetCol] = cardStartY + cardH + 3;
+      });
+    }
+
+    // ==========================================
+    // FOOTER
+    // ==========================================
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.4);
+    pdf.line(MX, 283, PAGE_W - MX, 283);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("UPCONTA — PLATAFORMA INTEGRAL DE SOFTWARE CONTABLE Y ERP", PAGE_W / 2, 287.5, { align: "center" });
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text("Documento oficial emitido por UpConta para distribución y demostración técnica", PAGE_W / 2, 291.5, { align: "center" });
+
+    const safePlanName = plan.nombre.replace(/[^a-zA-Z0-9]/g, "-");
+    const priceSuffix = conPrecio ? "ConPrecio" : "SinPrecio";
+    pdf.save(`Ficha-Tecnica-${safePlanName}-${priceSuffix}.pdf`);
   };
 
   // HIGH-FIDELITY PDF PROPOSAL GENERATION (jsPDF)
@@ -1673,7 +2055,7 @@ export default function App() {
                 1. Selecciona el Tipo de Plan Contable / Software
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                Explora las capacidades analíticas de cada categoría de software para tus clientes o empresa.
+                Explora las capacidades analíticas de cada categoría. Todos los planes se facturan en modalidad anual (únicamente los planes ERP permiten modalidad anual o mensual).
               </p>
             </div>
             
@@ -1773,21 +2155,21 @@ export default function App() {
                   const isSelected = selectedPlanName === p.nombre;
                   
                   let cyclePrice = p.precio;
-                  let itemCycleLabel = "/mes";
+                  let itemCycleLabel = "/anual";
                   if (tipoPlan === "erp") {
                     if (billingCycle === "annual") {
                       cyclePrice = p.precioAnual || (p.precio * 12);
-                      itemCycleLabel = "/año";
+                      itemCycleLabel = "/anual";
                     } else {
                       cyclePrice = p.precio;
                       itemCycleLabel = "/mes";
                     }
                   } else if (tipoPlan === "cloud") {
                     cyclePrice = p.precioAnual || p.precio;
-                    itemCycleLabel = "/año";
+                    itemCycleLabel = "/anual";
                   } else {
                     cyclePrice = p.precio;
-                    itemCycleLabel = "/mes";
+                    itemCycleLabel = "/anual";
                   }
 
                   const isCloud = tipoPlan === "cloud";
@@ -1853,8 +2235,8 @@ export default function App() {
                 }`}>
                   <div className="absolute top-0 right-0 w-32 h-32 bg-[#0B2545]/5 rounded-full blur-2xl pointer-events-none"></div>
                   
-                  <div className="flex justify-between items-start gap-4">
-                    <div>
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                    <div className="flex-1">
                       <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-md uppercase border ${
                         tipoPlan === "cloud"
                           ? "bg-amber-400 text-slate-950 border-amber-300"
@@ -1871,9 +2253,31 @@ export default function App() {
                           : "Estructura modular del plan y catálogo de submódulos normativos habilitados."
                         }
                       </p>
+
+                      {/* Botones Imprimir Ficha Oficial UpConta */}
+                      <div className="flex flex-wrap items-center gap-2 mt-3.5">
+                        <button
+                          type="button"
+                          onClick={() => handleGenerarFichaPlanPDF(viewedPlanObj, true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0B2545] hover:bg-[#003566] text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer"
+                          title="Descargar Ficha Técnica Oficial con desglose financiero e IVA"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Imprimir Ficha (Con Precio)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerarFichaPlanPDF(viewedPlanObj, false)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer"
+                          title="Descargar Ficha Técnica Oficial sin valores económicos"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-slate-600" />
+                          <span>Imprimir Ficha (Sin Precio)</span>
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="text-right">
+                    <div className="text-right sm:self-start shrink-0">
                       <div className={`text-2xl font-black ${tipoPlan === "cloud" ? "text-white" : "text-[#0B2545]"}`}>
                         ${(() => {
                           let displayPrice = viewedPlanObj.precio;
@@ -1889,10 +2293,10 @@ export default function App() {
                       </div>
                       <span className={`text-xs font-bold block mt-0.5 ${tipoPlan === "cloud" ? "text-purple-200" : "text-slate-500"}`}>
                         {(() => {
-                          if ((tipoPlan === "erp" && billingCycle === "annual") || tipoPlan === "cloud") {
-                            return "/año";
+                          if (tipoPlan === "erp") {
+                            return billingCycle === "annual" ? "/anual" : "/mes";
                           }
-                          return "/mes";
+                          return "/anual";
                         })()}
                       </span>
                     </div>
@@ -2082,18 +2486,21 @@ export default function App() {
                   const isSelected = selectedPlanName === p.nombre;
                   
                   let cyclePrice = p.precio;
-                  let itemCycleLabel = "/mes";
+                  let itemCycleLabel = "/anual";
                   if (tipoPlan === "erp") {
                     if (billingCycle === "annual") {
                       cyclePrice = p.precioAnual || (p.precio * 12);
-                      itemCycleLabel = "/año";
+                      itemCycleLabel = "/anual";
                     } else {
                       cyclePrice = p.precio;
                       itemCycleLabel = "/mes";
                     }
+                  } else if (tipoPlan === "cloud") {
+                    cyclePrice = p.precioAnual || p.precio;
+                    itemCycleLabel = "/anual";
                   } else {
                     cyclePrice = p.precio;
-                    itemCycleLabel = "/mes";
+                    itemCycleLabel = "/anual";
                   }
 
                   return (
