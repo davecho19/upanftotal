@@ -100,7 +100,21 @@ export const MODULOS_POR_TIER: Record<string, string[]> = {
 
 export const DETALLE_SUBMODULOS: Record<string, string[]> = {
   "ADMINISTRATIVO": ["Dashboard Informativo", "Proformas", "##COMPROBANTES ELECTRÓNICOS", "Facturación Electrónica", "Facturas de reembolso", "Facturación por Lote", "Comprobantes de retención", "Notas de Crédito", "Notas de Débito", "Liquidación de Compras", "Guías de Remisión", "Notas de Venta", "Compras", "##CONTRATOS", "Facturación recurrente"],
-  "PRODUCCIÓN": ["Dashboard Informativo", "Catálogo de servicios", "Catálogo de productos", "Productos en combo", "Multibodega", "Análisis de Rotación", "Inventarios - Entradas y Salidas", "Análisis de rentabilidad", "Órdenes de compra", "Productos con receta", "Productos fabricados", "Órdenes de producción"],
+  "PRODUCCIÓN": [
+    "Dashboard Informativo",
+    "Catálogo de servicios",
+    "Catálogo de productos",
+    "Productos con receta",
+    "Productos fabricados",
+    "Productos en combo",
+    "Multibodega",
+    "Liquidación de importaciones",
+    "Análisis de Rotación",
+    "Inventarios - Entradas y Salidas",
+    "Análisis de rentabilidad",
+    "Órdenes de compra",
+    "Órdenes de producción"
+  ],
   "IMPUESTOS": ["ATS", "Formulario 103", "Formulario 104"],
   "TESORERÍA": ["Dashboard informativo", "##PROVEEDORES", "Estado de cuenta proveedor", "Histórico de pagos", "Pagos masivos", "Anticipo proveedores", "##CLIENTES", "Estado de cuenta cliente", "Histórico de cobro", "Cobro masivo", "Anticipo clientes", "##CONCILIACIONES BANCARIAS"],
   "CONTABILIDAD": ["Centro de costos", "Reglas Contables - Asientos", "Balance de Comprobación", "Balance General", "Estado de pérdidas y ganancias"],

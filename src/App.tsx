@@ -1349,9 +1349,9 @@ export default function App() {
     pdf.text("DETALLE DE LA PROPUESTA ECONÓMICA", MX, tableY);
     tableY += 4.5;
 
-    // Columns: DESCRIPTION (60), QUANTITY (18), PRICE (20), TOTAL (20)
-    const colWidths = [60, 18, 20, 20];
-    const colTitles = ["DESCRIPCIÓN", "CANTIDAD", "PRECIO UNIT.", "VALOR TOTAL"];
+    // Columns: DESCRIPTION (80), QUANTITY (18), PRICE (20)
+    const colWidths = [80, 18, 20];
+    const colTitles = ["DESCRIPCIÓN", "CANTIDAD", "PRECIO UNIT."];
     let colX = MX;
 
     // Draw header row
@@ -1372,12 +1372,10 @@ export default function App() {
       selectedProposalPlans.forEach((p, idx) => {
         let cellX = MX;
         const unitPrice = p.precioPersonalizado !== null ? p.precioPersonalizado : p.precioBase;
-        const itemSubtotal = unitPrice * p.cantidad;
         const cells = [
           { text: `PLAN ${p.nombre.toUpperCase()} (${p.tipoPlan.toUpperCase()})`, align: "left" },
           { text: String(p.cantidad), align: "center" },
-          { text: `$${unitPrice.toFixed(2)}`, align: "center" },
-          { text: `$${itemSubtotal.toFixed(2)}`, align: "right" }
+          { text: `$${unitPrice.toFixed(2)}`, align: "center" }
         ];
 
         cells.forEach((cell, cellIdx) => {
@@ -1389,7 +1387,8 @@ export default function App() {
 
           pdf.setTextColor(...C_DARK_TEXT);
           pdf.setFont("helvetica", cellIdx === 0 ? "bold" : "normal");
-          pdf.setFontSize(8);
+          const textW = pdf.getTextWidth(cell.text);
+          pdf.setFontSize(cellIdx === 0 && textW > cw - 4 ? 7 : 8);
           const tX = cell.align === "right" ? cellX + cw - 2.5 : cell.align === "center" ? cellX + cw / 2 : cellX + 3;
           pdf.text(cell.text, tX, tableY + 4.8, { align: cell.align as "left" | "center" | "right" });
           cellX += cw;
@@ -1403,7 +1402,6 @@ export default function App() {
         const discountCells = [
           `DESCUENTO ESPECIAL PLAN BASE (${planDiscountPct}%)`,
           "",
-          "",
           `-$${planDiscountAmount.toFixed(2)}`
         ];
         discountCells.forEach((text, cellIdx) => {
@@ -1416,8 +1414,8 @@ export default function App() {
           pdf.setTextColor(185, 28, 28); // deep red text
           pdf.setFont("helvetica", cellIdx === 0 ? "bolditalic" : "bold");
           pdf.setFontSize(8);
-          const tX = cellIdx === 3 ? cellX + cw - 2.5 : cellIdx === 0 ? cellX + 3 : cellX + cw / 2;
-          pdf.text(text, tX, tableY + 4.5, { align: cellIdx === 3 ? "right" : cellIdx === 0 ? "left" : "center" });
+          const tX = cellIdx === 0 ? cellX + 3 : cellX + cw / 2;
+          pdf.text(text, tX, tableY + 4.5, { align: cellIdx === 0 ? "left" : "center" });
           cellX += cw;
         });
         tableY += 7;
@@ -1428,13 +1426,21 @@ export default function App() {
     if (selectedAddons.length > 0) {
       selectedAddons.forEach((addon, idx) => {
         let cellX = MX;
-        const addonTotal = addon.precio * addon.cantidad;
-        const cleanAddonName = addon.nombre.replace(/^ADD-ON:\s*/i, '').toUpperCase();
+        let cleanAddonName = addon.nombre.replace(/^ADD-ON:\s*/i, '').trim().toUpperCase();
+        
+        // Detailed voucher info for contador additional plans (Light, Base, Power)
+        if (cleanAddonName === "UP LIGHT" || cleanAddonName.includes("LIGHT")) {
+          cleanAddonName = "UP LIGHT (70 COMPROBANTES)";
+        } else if (cleanAddonName === "UP BASE" || cleanAddonName.includes("BASE")) {
+          cleanAddonName = "UP BASE (500 COMPROBANTES)";
+        } else if (cleanAddonName === "UP POWER" || cleanAddonName.includes("POWER")) {
+          cleanAddonName = "UP POWER (COMPROBANTES ILIMITADOS)";
+        }
+
         const cells = [
           { text: cleanAddonName, align: "left" },
           { text: String(addon.cantidad), align: "center" },
-          { text: `$${addon.precio.toFixed(2)}`, align: "center" },
-          { text: `$${addonTotal.toFixed(2)}`, align: "right" }
+          { text: `$${addon.precio.toFixed(2)}`, align: "center" }
         ];
 
         cells.forEach((cell, cellIdx) => {
@@ -1447,7 +1453,8 @@ export default function App() {
 
           pdf.setTextColor(...C_DARK_TEXT);
           pdf.setFont("helvetica", cellIdx === 0 ? "bold" : "normal");
-          pdf.setFontSize(8);
+          const textW = pdf.getTextWidth(cell.text);
+          pdf.setFontSize(cellIdx === 0 && textW > cw - 4 ? 7 : 8);
           const tX = cell.align === "right" ? cellX + cw - 2.5 : cell.align === "center" ? cellX + cw / 2 : cellX + 3;
           pdf.text(cell.text, tX, tableY + 4.8, { align: cell.align as "left" | "center" | "right" });
           cellX += cw;
@@ -1460,7 +1467,6 @@ export default function App() {
     if (selectedSignatures.length > 0) {
       selectedSignatures.forEach((sig, idx) => {
         let cellX = MX;
-        const sigTotal = sig.precio * sig.cantidad;
         const isPromo = sig.tipo.toUpperCase().includes("PROMO EMPRENDE");
         const cleanSigName = isPromo 
           ? `PROMO EMPRENDE (${sig.vigencia} - FIRMA ELECTRÓNICA + PLAN LIGHT)`
@@ -1468,8 +1474,7 @@ export default function App() {
         const cells = [
           { text: cleanSigName, align: "left" },
           { text: String(sig.cantidad), align: "center" },
-          { text: `$${sig.precio.toFixed(2)}`, align: "center" },
-          { text: `$${sigTotal.toFixed(2)}`, align: "right" }
+          { text: `$${sig.precio.toFixed(2)}`, align: "center" }
         ];
 
         cells.forEach((cell, cellIdx) => {
@@ -1482,7 +1487,8 @@ export default function App() {
 
           pdf.setTextColor(...C_DARK_TEXT);
           pdf.setFont("helvetica", cellIdx === 0 ? "bold" : "normal");
-          pdf.setFontSize(8);
+          const textW = pdf.getTextWidth(cell.text);
+          pdf.setFontSize(cellIdx === 0 && textW > cw - 4 ? 7 : 8);
           const tX = cell.align === "right" ? cellX + cw - 2.5 : cell.align === "center" ? cellX + cw / 2 : cellX + 3;
           pdf.text(cell.text, tX, tableY + 4.8, { align: cell.align as "left" | "center" | "right" });
           cellX += cw;
@@ -1589,7 +1595,7 @@ export default function App() {
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
       pdf.setTextColor(30, 41, 59);
-      pdf.text(noteText, MX + 5, nextY + 10.5, { maxWidth: noteMaxWidth, align: "justify" });
+      pdf.text(noteText, MX + 5, nextY + 10.5, { maxWidth: noteMaxWidth, align: "left" });
 
       nextY += boxHeight + 8;
     }
@@ -1755,11 +1761,17 @@ export default function App() {
 
       const x = MX + colIdx * (colW + colGap);
 
+      // Submodules list inside card
+      const subList = DETALLE_SUBMODULOS[modName] || [];
+      const itemSpacing = subList.length > 11 ? 3.6 : 4.1;
+      const fontSize = subList.length > 11 ? 6.2 : 6.8;
+      const calculatedCardH = Math.max(60, 11 + subList.length * itemSpacing + 2);
+
       // Draw single module card
       pdf.setDrawColor(...C_GRID_BORDER);
       pdf.setLineWidth(0.25);
       pdf.setFillColor(248, 250, 252);
-      pdf.roundedRect(x, cardY, colW, 60, 1.5, 1.5, "FD");
+      pdf.roundedRect(x, cardY, colW, calculatedCardH, 1.5, 1.5, "FD");
 
       // Module header
       pdf.setFillColor(...C_PRIMARY);
@@ -1769,27 +1781,25 @@ export default function App() {
       pdf.setTextColor(...C_HEADER_TEXT);
       pdf.text(`MÓDULO ${modName}`, x + colW / 2, cardY + 4.5, { align: "center" });
 
-      // Submodules list inside card
-      const subList = DETALLE_SUBMODULOS[modName] || [];
       let itemY = cardY + 11;
 
-      subList.slice(0, 11).forEach((itemText) => {
+      subList.forEach((itemText) => {
         if (itemText.startsWith("##")) {
           // Section header inside card
           pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(7);
+          pdf.setFontSize(subList.length > 11 ? 6.5 : 7);
           pdf.setTextColor(...C_PRIMARY);
           pdf.text(itemText.replace("##", "").toUpperCase(), x + 3, itemY);
         } else {
           // Bullet point
           pdf.setFillColor(...C_PRIMARY);
-          pdf.circle(x + 3.5, itemY - 1, 0.45, "F");
+          pdf.circle(x + 3.5, itemY - 1, 0.4, "F");
           pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(6.8);
+          pdf.setFontSize(fontSize);
           pdf.setTextColor(30, 41, 59); // Crisp dark text
           pdf.text(itemText, x + 5.5, itemY);
         }
-        itemY += 4.1;
+        itemY += itemSpacing;
       });
     });
 
