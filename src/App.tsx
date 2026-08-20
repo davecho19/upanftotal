@@ -71,11 +71,12 @@ import { DynamicBrandLogo, UpContaLogo, AnfLogo, CoBrandLogo } from "./component
 import { VentasModule } from "./components/VentasModule";
 import { ContadorModule } from "./components/ContadorModule";
 import { DashboardModule } from "./components/DashboardModule";
+import { RallyModule } from "./components/RallyModule";
 import { UpContaMascot } from "./components/UpContaMascot";
 
 export default function App() {
-  // Main Tab State: "plan", "explorador", "simulador", "firmas", "cuentas", "ventas", "contador", "dashboard"
-  const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard">("plan");
+  // Main Tab State: "plan", "explorador", "simulador", "firmas", "cuentas", "ventas", "contador", "dashboard", "rally"
+  const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard" | "rally">("plan");
 
   // Category tab state
   const [tipoPlan, setTipoPlan] = useState<"facturacion" | "erp" | "contador">("facturacion");
@@ -1853,6 +1854,8 @@ export default function App() {
                       ? "KPIer UpConta & ANF AC"
                       : activeTab === "dashboard"
                       ? "Dashboard Métrica de Ventas"
+                      : activeTab === "rally"
+                      ? "Rally Dakar de Ventas UpConta & ANF"
                       : "Plataforma Empresarial UpConta"}
                   </span>
                 </div>
@@ -1869,6 +1872,8 @@ export default function App() {
                     ? "Registro Oficial de Ventas"
                     : activeTab === "dashboard"
                     ? "Métricas Estadísticas & Comisiones"
+                    : activeTab === "rally"
+                    ? "Ruta de Carrera & Metas de Vendedores"
                     : "Fichas Técnicas & Cotizador"}
                 </h1>
               </div>
@@ -1929,19 +1934,19 @@ export default function App() {
             </div>
           </div>
 
-          {/* Underneath Logo & Motivation: INFO group on Left, Dashboard in Middle, COMERCIAL group on Right */}
-          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+          {/* Underneath Logo & Motivation: INFO group on Left, Centered Dashboard & Rally, COMERCIAL group on Right - Single Line */}
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 sm:gap-3 overflow-x-auto scrollbar-none flex-nowrap w-full">
             
             {/* GROUP 1: INFO */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1">
-              <div className="px-2.5 py-1 bg-blue-500/10 text-blue-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-blue-200/50 flex items-center gap-1 shrink-0 select-none">
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
+              <div className="px-2 py-1 bg-blue-500/10 text-blue-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-blue-200/50 flex items-center gap-1 shrink-0 select-none">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
                 <span>INFO</span>
               </div>
 
               <button
                 onClick={() => setActiveTab("plan")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeTab === "plan"
                     ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
@@ -1953,7 +1958,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("firmas")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeTab === "firmas"
                     ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
@@ -1965,7 +1970,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("cuentas")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeTab === "cuentas"
                     ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
@@ -1977,7 +1982,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("explorador")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeTab === "explorador"
                     ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
@@ -1988,29 +1993,50 @@ export default function App() {
               </button>
             </div>
 
-            {/* DASHBOARD BUTTON (STANDALONE 'Dashboard' IN THE MIDDLE BETWEEN INFO AND COMERCIAL) */}
-            <button
-              onClick={() => setActiveTab("dashboard")}
-              className={`px-5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 ${
-                activeTab === "dashboard"
-                  ? "bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white border-amber-300 ring-2 ring-orange-400/50 scale-[1.03]"
-                  : "bg-gradient-to-r from-[#0B2545] via-[#103460] to-[#0B2545] text-amber-300 hover:text-white border-orange-500/70 hover:border-orange-400 hover:scale-[1.02]"
-              }`}
-            >
-              <BarChart3 className="w-4 h-4 text-orange-400 fill-orange-400" />
-              <span className="uppercase tracking-wider font-black">Dashboard</span>
-            </button>
+            {/* DASHBOARD & RALLY BUTTONS (CENTERED IN THE MIDDLE BETWEEN INFO AND COMERCIAL) */}
+            <div className="flex items-center justify-center gap-2 shrink-0 mx-auto px-2">
+              <button
+                onClick={() => setActiveTab("dashboard")}
+                className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
+                  activeTab === "dashboard"
+                    ? "bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white border-amber-300 ring-2 ring-orange-400/50 scale-[1.03]"
+                    : "bg-gradient-to-r from-[#0B2545] via-[#103460] to-[#0B2545] text-amber-300 hover:text-white border-orange-500/70 hover:border-orange-400 hover:scale-[1.02]"
+                }`}
+              >
+                <BarChart3 className="w-4 h-4 text-orange-400 fill-orange-400" />
+                <span className="uppercase tracking-wider font-black">Dashboard</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab("rally")}
+                className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
+                  activeTab === "rally"
+                    ? "bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white border-red-300 ring-2 ring-red-400/60 scale-[1.03]"
+                    : "bg-white text-red-600 hover:text-red-700 border-red-500 hover:border-red-600 hover:bg-red-50/80 hover:scale-[1.02]"
+                }`}
+              >
+                <Flame className={`w-4 h-4 ${activeTab === "rally" ? "text-amber-300 fill-amber-300" : "text-red-600 fill-red-600 animate-pulse"}`} />
+                <span className={`uppercase tracking-wider font-black ${activeTab === "rally" ? "text-white" : "text-red-600"}`}>
+                  Rally
+                </span>
+                <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black uppercase tracking-wider ${
+                  activeTab === "rally" ? "bg-amber-400 text-slate-950" : "bg-red-100 text-red-700 border border-red-200"
+                }`}>
+                  Dakar
+                </span>
+              </button>
+            </div>
 
             {/* GROUP 2: COMERCIAL */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1">
-              <div className="px-2.5 py-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-200/50 flex items-center gap-1 shrink-0 select-none">
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
+              <div className="px-2 py-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-200/50 flex items-center gap-1 shrink-0 select-none">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 <span>COMERCIAL</span>
               </div>
 
               <button
                 onClick={() => setActiveTab("simulador")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeTab === "simulador"
                     ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
@@ -2022,7 +2048,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("contador")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeTab === "contador"
                     ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
@@ -2034,7 +2060,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("ventas")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeTab === "ventas"
                     ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
@@ -4455,6 +4481,9 @@ export default function App() {
 
         {/* ==================================== TABS: DASHBOARD METRICAS ==================================== */}
         {activeTab === "dashboard" && <DashboardModule />}
+
+        {/* ==================================== TABS: RALLY DE VENTAS DAKAR ==================================== */}
+        {activeTab === "rally" && <RallyModule />}
 
       </main>
 
