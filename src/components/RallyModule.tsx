@@ -171,6 +171,18 @@ const matchMonthFilter = (item: SaleTransaction, monthFilterValue: string) => {
   if (mLower.includes("august") || mLower.includes("agosto")) {
     return itemMesLower.includes("august") || itemMesLower.includes("agosto") || dateStr.startsWith("2026-08");
   }
+  if (mLower.includes("september") || mLower.includes("septiembre") || mLower.includes("setiembre")) {
+    return itemMesLower.includes("september") || itemMesLower.includes("septiembre") || itemMesLower.includes("setiembre") || dateStr.startsWith("2026-09");
+  }
+  if (mLower.includes("october") || mLower.includes("octubre")) {
+    return itemMesLower.includes("october") || itemMesLower.includes("octubre") || dateStr.startsWith("2026-10");
+  }
+  if (mLower.includes("november") || mLower.includes("noviembre")) {
+    return itemMesLower.includes("november") || itemMesLower.includes("noviembre") || dateStr.startsWith("2026-11");
+  }
+  if (mLower.includes("december") || mLower.includes("diciembre")) {
+    return itemMesLower.includes("december") || itemMesLower.includes("diciembre") || dateStr.startsWith("2026-12");
+  }
   if (mLower.includes("may") || mLower.includes("mayo")) {
     return itemMesLower.includes("may") || itemMesLower.includes("mayo") || dateStr.startsWith("2026-05");
   }
@@ -323,18 +335,38 @@ export function RallyModule() {
     fetchSales();
   }, []);
 
-  // Available unique months from dataset
+  // Available unique months from dataset, ensuring all 12 calendar months for the year are present
   const availableMonths = useMemo(() => {
+    const monthsFullYear = [
+      "January 2026", "February 2026", "March 2026", "April 2026",
+      "May 2026", "June 2026", "July 2026", "August 2026",
+      "September 2026", "October 2026", "November 2026", "December 2026"
+    ];
+
     const set = new Set<string>();
+    // Add full year sequence first
+    monthsFullYear.forEach(m => set.add(m));
+    // Add current month in case year is different
+    set.add(currentMonthStr);
+    // Add any existing months from sales data
     sales.forEach(s => {
       if (s.mes && s.mes.trim()) set.add(s.mes.trim());
     });
-    const arr = Array.from(set);
-    if (!arr.includes(currentMonthStr)) {
-      arr.unshift(currentMonthStr);
-    }
-    return arr;
+
+    return Array.from(set);
   }, [sales, currentMonthStr]);
+
+  // Keep selectedMonth updated to current month automatically if month rolls over
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const nowMonth = getCurrentMonthString();
+      if (nowMonth !== currentMonthStr) {
+        setSelectedMonth(nowMonth);
+      }
+    }, 60000); // check periodically every minute
+
+    return () => clearInterval(interval);
+  }, [currentMonthStr]);
 
   // Compute stats per seller for the selected month/period using official totalSinIva
   const sellerStats = useMemo(() => {
