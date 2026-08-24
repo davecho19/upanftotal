@@ -75,8 +75,34 @@ import { RallyModule } from "./components/RallyModule";
 import { UpContaMascot } from "./components/UpContaMascot";
 
 export default function App() {
+  // Access control state: by default only "dashboard" and "ventas" are visible until unlocked with D180890S
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [accessCodeInput, setAccessCodeInput] = useState<string>("");
+
+  const handleUnlock = () => {
+    if (accessCodeInput.trim().toUpperCase() === "D180890S") {
+      setIsUnlocked(true);
+      setAccessCodeInput("");
+    }
+  };
+
+  const handleLock = () => {
+    setIsUnlocked(false);
+    setAccessCodeInput("");
+    if (activeTab !== "dashboard" && activeTab !== "ventas") {
+      setActiveTab("dashboard");
+    }
+  };
+
   // Main Tab State: "plan", "explorador", "simulador", "firmas", "cuentas", "ventas", "contador", "dashboard", "rally"
-  const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard" | "rally">("plan");
+  const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard" | "rally">("dashboard");
+
+  // Keep active tab safe if locked
+  useEffect(() => {
+    if (!isUnlocked && activeTab !== "dashboard" && activeTab !== "ventas") {
+      setActiveTab("dashboard");
+    }
+  }, [isUnlocked, activeTab]);
 
   // Category tab state
   const [tipoPlan, setTipoPlan] = useState<"facturacion" | "erp" | "contador">("facturacion");
@@ -1829,7 +1855,7 @@ export default function App() {
       <header id="app-header" className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs py-2">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-2.5">
           
-          {/* Top Row: Logo & Platform Name */}
+          {/* Top Row: Logo & Platform Name + Top Right Controls */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             
             {/* Logo & Platform Name */}
@@ -1851,7 +1877,7 @@ export default function App() {
                       : activeTab === "contador"
                       ? "Calculadora Plan Contador UpConta"
                       : activeTab === "ventas"
-                      ? "KPIer UpConta & ANF AC"
+                      ? "Ventas UpConta & ANF AC"
                       : activeTab === "dashboard"
                       ? "Dashboard Métrica de Ventas"
                       : activeTab === "rally"
@@ -1879,34 +1905,65 @@ export default function App() {
               </div>
             </div>
 
-            {/* Quick billing cycle toggle - only shown when on Plan tab and ERP plan selected */}
-            {activeTab === "plan" && tipoPlan === "erp" && (
-              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs shrink-0">
+            {/* Top Right Controls: Billing toggle + Unlock Input with OK Button */}
+            <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+              {/* Quick billing cycle toggle - only shown when on Plan tab and ERP plan selected */}
+              {isUnlocked && activeTab === "plan" && tipoPlan === "erp" && (
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs shrink-0">
+                  <button
+                    onClick={() => setBillingCycle("monthly")}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      billingCycle === "monthly" 
+                        ? "bg-[#0B2545] text-white shadow" 
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Pago Mensual
+                  </button>
+                  <button
+                    onClick={() => setBillingCycle("annual")}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                      billingCycle === "annual" 
+                        ? "bg-[#0B2545] text-white shadow" 
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>Pago Anual</span>
+                    <span className="bg-blue-100 text-[#0B2545] border border-blue-200 text-[9px] font-bold px-1.5 py-0.5 rounded-md">
+                      Anual
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {/* Unlock input and OK button */}
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs">
+                <input
+                  type="text"
+                  value={accessCodeInput}
+                  onChange={(e) => setAccessCodeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleUnlock();
+                  }}
+                  placeholder="Código..."
+                  className="w-24 sm:w-28 px-2.5 py-1 text-xs bg-white border border-slate-300 rounded-lg text-slate-800 uppercase font-mono font-bold tracking-wider focus:outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545] placeholder:text-slate-400 placeholder:normal-case placeholder:font-sans"
+                />
                 <button
-                  onClick={() => setBillingCycle("monthly")}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    billingCycle === "monthly" 
-                      ? "bg-[#0B2545] text-white shadow" 
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
+                  onClick={handleUnlock}
+                  className="px-3 py-1 bg-[#0B2545] hover:bg-[#003566] text-white text-xs font-black rounded-lg transition-all cursor-pointer shadow-xs uppercase tracking-wider"
+                  title="Desbloquear pestañas"
                 >
-                  Pago Mensual
+                  OK
                 </button>
                 <button
-                  onClick={() => setBillingCycle("annual")}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer ${
-                    billingCycle === "annual" 
-                      ? "bg-[#0B2545] text-white shadow" 
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
+                  onClick={handleLock}
+                  className="px-2.5 py-1 bg-slate-700 hover:bg-rose-600 text-white text-xs font-black rounded-lg transition-all cursor-pointer shadow-xs uppercase tracking-wider flex items-center justify-center"
+                  title="Ocultar pestañas (Bloquear)"
                 >
-                  <span>Pago Anual</span>
-                  <span className="bg-blue-100 text-[#0B2545] border border-blue-200 text-[9px] font-bold px-1.5 py-0.5 rounded-md">
-                    Anual
-                  </span>
+                  X
                 </button>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Motivational Sales Ticker Banner - Full Width directly under Plataforma Empresarial UpConta */}
@@ -1934,142 +1991,174 @@ export default function App() {
             </div>
           </div>
 
-          {/* Underneath Logo & Motivation: INFO group on Left, Centered Dashboard & Rally, COMERCIAL group on Right - Single Line */}
+          {/* Underneath Logo & Motivation: Tabs Header */}
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 sm:gap-3 overflow-x-auto scrollbar-none flex-nowrap w-full">
             
-            {/* GROUP 1: INFO */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
-              <div className="px-2 py-1 bg-blue-500/10 text-blue-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-blue-200/50 flex items-center gap-1 shrink-0 select-none">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                <span>INFO</span>
+            {!isUnlocked ? (
+              /* Minimal view when locked: ONLY Dashboard and Ventas */
+              <div className="flex items-center justify-center gap-3 w-full py-1">
+                <button
+                  onClick={() => setActiveTab("dashboard")}
+                  className={`px-4 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
+                    activeTab === "dashboard"
+                      ? "bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white border-amber-300 ring-2 ring-orange-400/50 scale-[1.03]"
+                      : "bg-gradient-to-r from-[#0B2545] via-[#103460] to-[#0B2545] text-amber-300 hover:text-white border-orange-500/70 hover:border-orange-400 hover:scale-[1.02]"
+                  }`}
+                >
+                  <BarChart3 className="w-4 h-4 text-orange-400 fill-orange-400" />
+                  <span className="uppercase tracking-wider font-black">Dashboard</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("ventas")}
+                  className={`px-4 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
+                    activeTab === "ventas"
+                      ? "bg-emerald-600 text-white border-emerald-300 ring-2 ring-emerald-400/50 shadow-md scale-[1.03]"
+                      : "bg-white text-emerald-700 hover:text-emerald-800 border-emerald-500 hover:border-emerald-600 hover:bg-emerald-50/80 hover:scale-[1.02]"
+                  }`}
+                >
+                  <DollarSign className="w-4 h-4 text-emerald-500" />
+                  <span className="uppercase tracking-wider font-black">Ventas</span>
+                </button>
               </div>
+            ) : (
+              /* Full View when Unlocked with D180890S: All tabs visible */
+              <>
+                {/* GROUP 1: INFO */}
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
+                  <div className="px-2 py-1 bg-blue-500/10 text-blue-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-blue-200/50 flex items-center gap-1 shrink-0 select-none">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                    <span>INFO</span>
+                  </div>
 
-              <button
-                onClick={() => setActiveTab("plan")}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                  activeTab === "plan"
-                    ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5 text-blue-400" />
-                <span>Plan</span>
-              </button>
+                  <button
+                    onClick={() => setActiveTab("plan")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "plan"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Plan</span>
+                  </button>
 
-              <button
-                onClick={() => setActiveTab("firmas")}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                  activeTab === "firmas"
-                    ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                }`}
-              >
-                <FileCheck className="w-3.5 h-3.5 text-orange-400" />
-                <span>Firmas</span>
-              </button>
+                  <button
+                    onClick={() => setActiveTab("firmas")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "firmas"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <FileCheck className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Firmas</span>
+                  </button>
 
-              <button
-                onClick={() => setActiveTab("cuentas")}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                  activeTab === "cuentas"
-                    ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                }`}
-              >
-                <Landmark className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Cuentas</span>
-              </button>
+                  <button
+                    onClick={() => setActiveTab("cuentas")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "cuentas"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <Landmark className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Cuentas</span>
+                  </button>
 
-              <button
-                onClick={() => setActiveTab("explorador")}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                  activeTab === "explorador"
-                    ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                }`}
-              >
-                <Sliders className="w-3.5 h-3.5 text-purple-400" />
-                <span>Explorador</span>
-              </button>
-            </div>
+                  <button
+                    onClick={() => setActiveTab("explorador")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "explorador"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Explorador</span>
+                  </button>
+                </div>
 
-            {/* DASHBOARD & RALLY BUTTONS (CENTERED IN THE MIDDLE BETWEEN INFO AND COMERCIAL) */}
-            <div className="flex items-center justify-center gap-2 shrink-0 mx-auto px-2">
-              <button
-                onClick={() => setActiveTab("dashboard")}
-                className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
-                  activeTab === "dashboard"
-                    ? "bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white border-amber-300 ring-2 ring-orange-400/50 scale-[1.03]"
-                    : "bg-gradient-to-r from-[#0B2545] via-[#103460] to-[#0B2545] text-amber-300 hover:text-white border-orange-500/70 hover:border-orange-400 hover:scale-[1.02]"
-                }`}
-              >
-                <BarChart3 className="w-4 h-4 text-orange-400 fill-orange-400" />
-                <span className="uppercase tracking-wider font-black">Dashboard</span>
-              </button>
+                {/* DASHBOARD & RALLY BUTTONS (CENTERED IN THE MIDDLE BETWEEN INFO AND COMERCIAL) */}
+                <div className="flex items-center justify-center gap-2 shrink-0 mx-auto px-2">
+                  <button
+                    onClick={() => setActiveTab("dashboard")}
+                    className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
+                      activeTab === "dashboard"
+                        ? "bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white border-amber-300 ring-2 ring-orange-400/50 scale-[1.03]"
+                        : "bg-gradient-to-r from-[#0B2545] via-[#103460] to-[#0B2545] text-amber-300 hover:text-white border-orange-500/70 hover:border-orange-400 hover:scale-[1.02]"
+                    }`}
+                  >
+                    <BarChart3 className="w-4 h-4 text-orange-400 fill-orange-400" />
+                    <span className="uppercase tracking-wider font-black">Dashboard</span>
+                  </button>
 
-              <button
-                onClick={() => setActiveTab("rally")}
-                className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
-                  activeTab === "rally"
-                    ? "bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white border-red-300 ring-2 ring-red-400/60 scale-[1.03]"
-                    : "bg-white text-red-600 hover:text-red-700 border-red-500 hover:border-red-600 hover:bg-red-50/80 hover:scale-[1.02]"
-                }`}
-              >
-                <Flame className={`w-4 h-4 ${activeTab === "rally" ? "text-amber-300 fill-amber-300" : "text-red-600 fill-red-600 animate-pulse"}`} />
-                <span className={`uppercase tracking-wider font-black ${activeTab === "rally" ? "text-white" : "text-red-600"}`}>
-                  Rally
-                </span>
-                <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black uppercase tracking-wider ${
-                  activeTab === "rally" ? "bg-amber-400 text-slate-950" : "bg-red-100 text-red-700 border border-red-200"
-                }`}>
-                  Dakar
-                </span>
-              </button>
-            </div>
+                  <button
+                    onClick={() => setActiveTab("rally")}
+                    className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
+                      activeTab === "rally"
+                        ? "bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white border-red-300 ring-2 ring-red-400/60 scale-[1.03]"
+                        : "bg-white text-red-600 hover:text-red-700 border-red-500 hover:border-red-600 hover:bg-red-50/80 hover:scale-[1.02]"
+                    }`}
+                  >
+                    <Flame className={`w-4 h-4 ${activeTab === "rally" ? "text-amber-300 fill-amber-300" : "text-red-600 fill-red-600 animate-pulse"}`} />
+                    <span className={`uppercase tracking-wider font-black ${activeTab === "rally" ? "text-white" : "text-red-600"}`}>
+                      Rally
+                    </span>
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black uppercase tracking-wider ${
+                      activeTab === "rally" ? "bg-amber-400 text-slate-950" : "bg-red-100 text-red-700 border border-red-200"
+                    }`}>
+                      Dakar
+                    </span>
+                  </button>
+                </div>
 
-            {/* GROUP 2: COMERCIAL */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
-              <div className="px-2 py-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-200/50 flex items-center gap-1 shrink-0 select-none">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span>COMERCIAL</span>
-              </div>
+                {/* GROUP 2: COMERCIAL */}
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
+                  <div className="px-2 py-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-200/50 flex items-center gap-1 shrink-0 select-none">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>COMERCIAL</span>
+                  </div>
 
-              <button
-                onClick={() => setActiveTab("simulador")}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                  activeTab === "simulador"
-                    ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                }`}
-              >
-                <Calculator className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Simulador</span>
-              </button>
+                  <button
+                    onClick={() => setActiveTab("simulador")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "simulador"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <Calculator className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Simulador</span>
+                  </button>
 
-              <button
-                onClick={() => setActiveTab("contador")}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                  activeTab === "contador"
-                    ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                }`}
-              >
-                <Briefcase className="w-3.5 h-3.5 text-amber-400" />
-                <span>Contador</span>
-              </button>
+                  <button
+                    onClick={() => setActiveTab("contador")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "contador"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <Briefcase className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Contador</span>
+                  </button>
 
-              <button
-                onClick={() => setActiveTab("ventas")}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                  activeTab === "ventas"
-                    ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                }`}
-              >
-                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                <span>KPIer Ventas</span>
-              </button>
-            </div>
+                  <button
+                    onClick={() => setActiveTab("ventas")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "ventas"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Ventas</span>
+                  </button>
+                </div>
+              </>
+            )}
 
           </div>
 

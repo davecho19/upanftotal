@@ -342,7 +342,7 @@ export function VentasModule() {
 
       setStatusMessage({
         type: "success",
-        text: "¡Venta registrada exitosamente en el sistema KPIer UpConta & ANF!",
+        text: "¡Venta registrada exitosamente en el sistema de Ventas UpConta & ANF!",
       });
 
       // Reset form
