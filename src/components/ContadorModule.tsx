@@ -11,12 +11,15 @@ import {
   ShieldCheck, 
   Users, 
   FileText,
+  FileDown,
+  Printer,
   MessageSquare,
   HelpCircle,
   Briefcase,
   TrendingUp,
   Boxes
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 
 interface Asesor {
   nombre: string;
@@ -144,6 +147,474 @@ export function ContadorModule() {
 
   const formatMoney = (val: number) => {
     return val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  // OFFICIAL TECHNICAL SHEET PDF GENERATION FOR PLAN CONTADOR
+  const handleGenerarFichaPlanContadorPDF = () => {
+    const pdf = new jsPDF("p", "mm", "a4");
+    const PAGE_W = 210;
+    const PAGE_H = 297;
+    const MX = 14;
+    const CONTENT_W = PAGE_W - (MX * 2); // 182mm
+
+    // Draw clean white background
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, PAGE_W, PAGE_H, "F");
+
+    // Top Header: UpConta Logo on Left
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 520;
+      canvas.height = 130;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, 520, 130);
+        ctx.font = "900 102px system-ui, -apple-system, BlinkMacSystemFont, 'Montserrat', sans-serif";
+        ctx.fillStyle = "#FF5500";
+        ctx.fillText("Up", 10, 92);
+
+        ctx.fillStyle = "#0B2545";
+        ctx.fillText("Conta", 152, 92);
+
+        ctx.save();
+        ctx.translate(426, 12);
+        ctx.strokeStyle = "#FF5500";
+        ctx.lineWidth = 18;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        ctx.beginPath();
+        ctx.moveTo(12, 50);
+        ctx.lineTo(52, 50);
+        ctx.arcTo(68, 50, 68, 34, 16);
+        ctx.lineTo(68, 10);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(50, 22);
+        ctx.lineTo(68, 4);
+        ctx.lineTo(86, 22);
+        ctx.stroke();
+        ctx.restore();
+
+        const logoData = canvas.toDataURL("image/png");
+        pdf.addImage(logoData, "PNG", MX, 11, 48, 12);
+      }
+    } catch {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(22);
+      pdf.setTextColor(255, 85, 0);
+      pdf.text("Up", MX, 21);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text("Conta", MX + 12, 21);
+    }
+
+    // Top Header: Right aligned Official Title
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("FICHA TÉCNICA OFICIAL DE PLAN", PAGE_W - MX, 14, { align: "right" });
+
+    const getPlanContadorTitle = () => {
+      switch (tipoEmpresaBase) {
+        case "1": return "PLAN CONTADOR 1 EMPRESA";
+        case "3": return "PLAN CONTADOR 3 EMPRESAS";
+        case "6": return "PLAN CONTADOR 6 EMPRESAS";
+        case "10": return "PLAN CONTADOR 10 EMPRESAS";
+        case "tax_ilimitado": return "PLAN TAX ILIMITADO";
+        case "ilimitadas": return "PLAN SOCIO ESTRATÉGICO ILIMITADO";
+        default: return "PLAN CONTADOR UPCONTA";
+      }
+    };
+
+    pdf.setFontSize(14);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text(getPlanContadorTitle(), PAGE_W - MX, 20.5, { align: "right" });
+
+    const todayFormatted = new Date().toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" });
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(`UPCONTA • ECUADOR • ${todayFormatted}`, PAGE_W - MX, 25.5, { align: "right" });
+
+    // Blue Accent separator line
+    pdf.setDrawColor(11, 37, 69);
+    pdf.setLineWidth(0.7);
+    pdf.line(MX, 28.5, PAGE_W - MX, 28.5);
+
+    // ==========================================
+    // 2 TOP BOXES SIDE BY SIDE (y = 31.5)
+    // ==========================================
+    const boxTopY = 31.5;
+    const boxW = (CONTENT_W - 6) / 2; // 88mm
+    const boxH = 43;
+    const box1X = MX;
+    const box2X = MX + boxW + 6;
+
+    // BOX 1: ESPECIFICACIONES & LÍMITES
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(box1X, boxTopY, boxW, 6.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("ESPECIFICACIONES & LÍMITES", box1X + (boxW / 2), boxTopY + 4.5, { align: "center" });
+
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.3);
+    pdf.rect(box1X, boxTopY, boxW, boxH, "S");
+
+    const getEmpresasLimit = () => {
+      switch (tipoEmpresaBase) {
+        case "1": return "1 Empresa / RUC";
+        case "3": return "3 Empresas / RUCs";
+        case "6": return "6 Empresas / RUCs";
+        case "10": return "10 Empresas / RUCs";
+        case "tax_ilimitado": return "Tax Ilimitado";
+        case "ilimitadas": return "Empresas Ilimitadas";
+        default: return "A convenir";
+      }
+    };
+
+    const getFacturacionDetail = () => {
+      if (totalPlanesFactura === 0) return "Opcional / Sin paquetes";
+      const parts = [];
+      if (cant70 > 0) parts.push(`70: ${cant70} ud`);
+      if (cant500 > 0) parts.push(`500: ${cant500} ud`);
+      if (cantIlim > 0) parts.push(`Ilim: ${cantIlim} ud`);
+      return parts.join(" | ");
+    };
+
+    const specRows = [
+      { label: "Plan:", value: getPlanContadorTitle() },
+      { label: "Categoría / Tier:", value: "CONTADOR / ESTUDIO CONTABLE" },
+      { label: "Límite Empresas / RUC:", value: getEmpresasLimit() },
+      { label: "Facturación e Inventarios:", value: getFacturacionDetail() },
+      { label: "Módulos Corporativos:", value: totalModulosCantidad > 0 ? `${totalModulosCantidad} Módulos ($75 c/u)` : "0 Módulos adicionales" }
+    ];
+
+    let rowY = boxTopY + 11.5;
+    specRows.forEach((r, idx) => {
+      if (idx % 2 === 1) {
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(box1X + 0.5, rowY - 3.5, boxW - 1, 6.8, "F");
+      }
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text(r.label, box1X + 3.5, rowY);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text(r.value, box1X + boxW - 3.5, rowY, { align: "right" });
+
+      rowY += 7;
+    });
+
+    // BOX 2: DESGLOSE FINANCIERO OFICIAL
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(box2X, boxTopY, boxW, 6.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("DESGLOSE FINANCIERO OFICIAL", box2X + (boxW / 2), boxTopY + 4.5, { align: "center" });
+
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.3);
+    pdf.rect(box2X, boxTopY, boxW, boxH, "S");
+
+    const finRows = [
+      { label: "Precio Base Plan:", value: `$${subtotal.toFixed(2)} USD` },
+      { label: "Modalidad de Pago:", value: "Pago Anual" },
+      { label: "IVA Ecuador (15%):", value: `$${iva.toFixed(2)} USD` }
+    ];
+
+    let finY = boxTopY + 13;
+    finRows.forEach((r, idx) => {
+      if (idx % 2 === 1) {
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(box2X + 0.5, finY - 3.5, boxW - 1, 7.5, "F");
+      }
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text(r.label, box2X + 3.5, finY);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text(r.value, box2X + boxW - 3.5, finY, { align: "right" });
+
+      finY += 7.5;
+    });
+
+    // Highlight Total Bar at bottom of box 2
+    const totalBarY = boxTopY + boxH - 7.5;
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(box2X, totalBarY, boxW, 7.5, "F");
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("TOTAL ESTIMADO CON IVA", box2X + 3.5, totalBarY + 5);
+
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(251, 191, 36); // Yellow accent
+    pdf.text(`$${totalAnual.toFixed(2)} USD`, box2X + boxW - 3.5, totalBarY + 5, { align: "right" });
+
+    // ==========================================
+    // SECTION: DESGLOSE DE MÓDULOS TRONCALES
+    // ==========================================
+    const modSectionY = boxTopY + boxH + 4; // ~78.5mm
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(MX, modSectionY, CONTENT_W, 6.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("DESGLOSE DE MÓDULOS TRONCALES INCLUIDOS EN EL PLAN (PLAN CONTADOR)", PAGE_W / 2, modSectionY + 4.5, { align: "center" });
+
+    const contentStartY = modSectionY + 8.5;
+    const colW = (CONTENT_W - 6) / 3; // ~58mm
+
+    // Col 1: Administrativo
+    const col1X = MX;
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(col1X, contentStartY, colW, 5.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(6.8);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("MÓDULO: ADMINISTRATIVO", col1X + (colW / 2), contentStartY + 3.8, { align: "center" });
+
+    const col1Items = [
+      "Dashboard Informativo",
+      "Proformas y Cotizaciones",
+      "COMPROBANTES ELECTRÓNICOS",
+      "Facturación Electrónica SRI",
+      "Facturas de reembolso",
+      "Facturación por Lote",
+      "Comprobantes de retención",
+      "Notas de Crédito y Débito",
+      "Liquidación de Compras",
+      "Guías de Remisión",
+      "Notas de Venta y Compras",
+      "CONTRATOS / Fact. Recurrente"
+    ];
+    let c1Y = contentStartY + 9;
+    col1Items.forEach(item => {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text(`• ${item}`, col1X + 2.5, c1Y);
+      c1Y += 4.1;
+    });
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.3);
+    pdf.rect(col1X, contentStartY, colW, 142, "S");
+
+    // Col 2: Impuestos & Producción
+    const col2X = MX + colW + 3;
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(col2X, contentStartY, colW, 5.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(6.8);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("MÓDULO: IMPUESTOS & TRIBUTARIO", col2X + (colW / 2), contentStartY + 3.8, { align: "center" });
+
+    const col2Items1 = [
+      "ATS (Anexo Transaccional SRI)",
+      "Formulario 103 (Retenciones)",
+      "Formulario 104 (Declaración IVA)",
+      "Reporte Tributario Automatizado"
+    ];
+    let c2Y = contentStartY + 9;
+    col2Items1.forEach(item => {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text(`• ${item}`, col2X + 2.5, c2Y);
+      c2Y += 4.1;
+    });
+
+    // Producción subheader inside col 2
+    c2Y += 2;
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(col2X, c2Y, colW, 5.2, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(6.8);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("MÓDULO: PRODUCCIÓN & INVENTARIOS", col2X + (colW / 2), c2Y + 3.6, { align: "center" });
+
+    const col2Items2 = [
+      "Catálogo de productos y servicios",
+      "Productos con receta y combos",
+      "Multibodega y transferencias",
+      "Liquidación de importaciones",
+      "Análisis de Rotación e Inventarios",
+      "Análisis de Rentabilidad",
+      "Órdenes de compra y producción"
+    ];
+    c2Y += 8.5;
+    col2Items2.forEach(item => {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text(`• ${item}`, col2X + 2.5, c2Y);
+      c2Y += 4.1;
+    });
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.3);
+    pdf.rect(col2X, contentStartY, colW, 142, "S");
+
+    // Col 3: Contabilidad & Módulos Corporativos
+    const col3X = MX + (colW * 2) + 6;
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(col3X, contentStartY, colW, 5.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(6.8);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("MÓDULO: CONTABILIDAD", col3X + (colW / 2), contentStartY + 3.8, { align: "center" });
+
+    const col3Items1 = [
+      "Plan de Cuentas NIIF flexible",
+      "Centro de costos departamentales",
+      "Reglas Contables y Asientos aut.",
+      "Balance de Comprobación",
+      "Balance General Consolidado",
+      "Estado de Pérdidas y Ganancias (P&L)"
+    ];
+    let c3Y = contentStartY + 9;
+    col3Items1.forEach(item => {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text(`• ${item}`, col3X + 2.5, c3Y);
+      c3Y += 4.1;
+    });
+
+    // Módulos corporativos subheader inside col 3
+    c3Y += 2;
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(col3X, c3Y, colW, 5.2, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(6.8);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("MÓDULOS CORPORATIVOS", col3X + (colW / 2), c3Y + 3.6, { align: "center" });
+
+    const corpList = [];
+    if (mTesoreriaCant > 0) corpList.push(`Tesorería y Bancos (${mTesoreriaCant} ud)`);
+    else corpList.push("Tesorería y Bancos (Opcional)");
+    if (mNominaCant > 0) corpList.push(`Nómina y Roles (${mNominaCant} ud)`);
+    else corpList.push("Nómina y Roles (Opcional)");
+    if (mActivosCant > 0) corpList.push(`Activos Fijos (${mActivosCant} ud)`);
+    else corpList.push("Activos Fijos (Opcional)");
+    if (mRestaurantesCant > 0) corpList.push(`Restaurantes y Mesas (${mRestaurantesCant} ud)`);
+    else corpList.push("Restaurantes y Comandas (Opc.)");
+    if (mContabilidadCant > 0) corpList.push(`Contabilidad Avanzada (${mContabilidadCant} ud)`);
+    else corpList.push("Contabilidad Avanzada (Opc.)");
+
+    c3Y += 8.5;
+    corpList.forEach(item => {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text(`• ${item}`, col3X + 2.5, c3Y);
+      c3Y += 4.1;
+    });
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.3);
+    pdf.rect(col3X, contentStartY, colW, 142, "S");
+
+    // ==========================================
+    // BOX: DATOS DEL ASESOR COMERCIAL ASIGNADO (AL FINAL DE LA HOJA)
+    // ==========================================
+    const asesorObj = asesorKey && ASESORES[asesorKey] ? ASESORES[asesorKey] : null;
+    const asesorBoxY = 241;
+    const asesorBoxH = 34;
+
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(MX, asesorBoxY, CONTENT_W, 6.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("DATOS DEL ASESOR COMERCIAL ASIGNADO — UPCONTA ECUADOR", PAGE_W / 2, asesorBoxY + 4.5, { align: "center" });
+
+    pdf.setFillColor(248, 250, 252);
+    pdf.rect(MX, asesorBoxY + 6.5, CONTENT_W, asesorBoxH - 6.5, "F");
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.3);
+    pdf.rect(MX, asesorBoxY, CONTENT_W, asesorBoxH, "S");
+
+    const colAsesorW = (CONTENT_W - 4) / 3;
+
+    // Asesor Column 1: Asesor y Cargo
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("Asesor Comercial:", MX + 4, asesorBoxY + 12);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.setTextColor(234, 88, 12); // Orange
+    pdf.text(asesorObj ? asesorObj.nombre : "Equipo Comercial UpConta", MX + 4, asesorBoxY + 17);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text("Especialista en Soluciones Contables y ERP", MX + 4, asesorBoxY + 22);
+    pdf.text("UpConta Software Cloud Ecuador", MX + 4, asesorBoxY + 26);
+
+    // Asesor Column 2: WhatsApp y Atención
+    const colA2X = MX + colAsesorW + 2;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("Contacto & WhatsApp:", colA2X + 2, asesorBoxY + 12);
+
+    const phoneStr = asesorObj ? `+${asesorObj.telefono.replace(/(\d{3})(\d{2})(\d{3})(\d{4})/, "$1 $2 $3 $4")}` : "+593 99 038 8493";
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(15, 23, 42);
+    pdf.text(phoneStr, colA2X + 2, asesorBoxY + 17);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text("Horario: Lunes a Viernes 08:30 - 18:00", colA2X + 2, asesorBoxY + 22);
+    pdf.text("Atención personalizada y soporte continuo", colA2X + 2, asesorBoxY + 26);
+
+    // Asesor Column 3: Garantía y Emisión
+    const colA3X = MX + (colAsesorW * 2) + 4;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("Soporte & Garantía:", colA3X + 2, asesorBoxY + 12);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7);
+    pdf.setTextColor(30, 41, 59);
+    pdf.text("• www.upconta.com", colA3X + 2, asesorBoxY + 16.5);
+    pdf.text("• Soporte técnico incluido 100% Cloud", colA3X + 2, asesorBoxY + 20.5);
+    pdf.text("• Actualizaciones tributarias SRI garantizadas", colA3X + 2, asesorBoxY + 24.5);
+    pdf.text("• Validez de cotización: 15 días calendario", colA3X + 2, asesorBoxY + 28.5);
+
+    // ==========================================
+    // FOOTER
+    // ==========================================
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.4);
+    pdf.line(MX, 280, PAGE_W - MX, 280);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("UPCONTA — PLATAFORMA INTEGRAL DE SOFTWARE CONTABLE Y ERP", PAGE_W / 2, 285, { align: "center" });
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text("Documento oficial emitido por UpConta para distribución y demostración técnica", PAGE_W / 2, 289, { align: "center" });
+
+    const safeTitle = getPlanContadorTitle().replace(/[^a-zA-Z0-9]/g, "-");
+    pdf.save(`Ficha-Tecnica-${safeTitle}.pdf`);
   };
 
   // WhatsApp Sender
@@ -476,6 +947,25 @@ export function ContadorModule() {
                 ${formatMoney(valPromedio)} <span className="text-xs font-normal text-slate-400">/ año</span>
               </span>
             </div>
+
+            {/* Action Buttons: PDF Export & WhatsApp */}
+            <div className="space-y-2.5 pt-2">
+              <button
+                onClick={handleGenerarFichaPlanContadorPDF}
+                className="w-full py-3.5 px-4 bg-white hover:bg-slate-100 text-[#0B2545] font-black text-sm rounded-2xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-2.5 border border-slate-200 hover:shadow-lg active:scale-[0.99]"
+              >
+                <FileDown className="w-5 h-5 text-orange-600 shrink-0" />
+                <span className="tracking-wide">Imprimir Ficha Técnica en PDF</span>
+              </button>
+
+              <button
+                onClick={handleEnviarWhatsApp}
+                className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-2xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-2.5 hover:shadow-lg active:scale-[0.99]"
+              >
+                <MessageSquare className="w-5 h-5 shrink-0" />
+                <span className="tracking-wide">Enviar Cotización por WhatsApp</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -484,18 +974,28 @@ export function ContadorModule() {
       {/* Dynamic Module Showcase ("Ficha Técnica de tu Plan") */}
       {tipoEmpresaBase !== "0" && (
         <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
-          <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
-            <div className="p-2.5 bg-orange-50 text-orange-600 rounded-2xl">
-              <Layers className="w-6 h-6" />
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-orange-50 text-orange-600 rounded-2xl">
+                <Layers className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-lg sm:text-xl">
+                  Ficha Técnica de tu Plan
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Módulos y capacidades incluidas en la configuración actual
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-extrabold text-slate-900 text-lg sm:text-xl">
-                Ficha Técnica de tu Plan
-              </h3>
-              <p className="text-xs text-slate-500">
-                Módulos y capacidades incluidas en la configuración actual
-              </p>
-            </div>
+
+            <button
+              onClick={handleGenerarFichaPlanContadorPDF}
+              className="px-4 py-2.5 bg-[#0B2545] hover:bg-[#003566] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs flex items-center gap-2"
+            >
+              <Printer className="w-4 h-4 text-orange-400" />
+              <span>Imprimir Ficha PDF</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

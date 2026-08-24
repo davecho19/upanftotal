@@ -1627,38 +1627,97 @@ export default function App() {
       nextY += boxHeight + 8;
     }
 
-    // 7. Signature Footer Executive Section (Aligned at the very bottom of Page 1)
-    const footerY = PAGE_H - 28;
-    pdf.setDrawColor(...C_PRIMARY);
-    pdf.setLineWidth(0.5);
-    pdf.line(MX, footerY - 5, PAGE_W - MX, footerY - 5);
+    // 7. Signature Footer Executive Section - Formato Oficial Datos del Asesor Asignado
+    const asesorBoxY = 241;
+    const asesorBoxH = 34;
+    const CONTENT_W = PAGE_W - (MX * 2);
 
-    // Left Column: Advisor name and title
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(MX, asesorBoxY, CONTENT_W, 6.5, "F");
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(13);
-    pdf.setTextColor(...C_PRIMARY);
-    pdf.text(advisorName.toUpperCase(), MX + 3, footerY + 2);
-    
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(9.5);
-    pdf.setTextColor(71, 85, 105);
-    pdf.text("Comercial Corporativo", MX + 3, footerY + 7);
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("DATOS DEL ASESOR COMERCIAL ASIGNADO — UPCONTA ECUADOR", PAGE_W / 2, asesorBoxY + 4.5, { align: "center" });
 
-    // Vertical Divider
-    pdf.setDrawColor(...C_PRIMARY);
-    pdf.setLineWidth(0.5);
-    pdf.line(PAGE_W / 2, footerY - 2, PAGE_W / 2, footerY + 12);
+    pdf.setFillColor(248, 250, 252);
+    pdf.rect(MX, asesorBoxY + 6.5, CONTENT_W, asesorBoxH - 6.5, "F");
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.3);
+    pdf.rect(MX, asesorBoxY, CONTENT_W, asesorBoxH, "S");
 
-    // Right Column: Phone and email
+    const colAsesorW = (CONTENT_W - 4) / 3;
+
+    // Asesor Column 1: Asesor y Cargo
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(11.5);
-    pdf.setTextColor(...C_DARK_TEXT);
-    pdf.text(advisorPhone || "Contacto Corporativo", PAGE_W / 2 + 10, footerY + 2);
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("Asesor Comercial:", MX + 4, asesorBoxY + 12);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.setTextColor(234, 88, 12); // Orange
+    pdf.text(advisorName || "Equipo Comercial UpConta", MX + 4, asesorBoxY + 17);
 
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(9.5);
-    pdf.setTextColor(71, 85, 105);
-    pdf.text(advisorEmail || "", PAGE_W / 2 + 10, footerY + 7);
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text("Especialista en Soluciones Contables y ERP", MX + 4, asesorBoxY + 22);
+    pdf.text("UpConta Software Cloud Ecuador", MX + 4, asesorBoxY + 26);
+
+    // Asesor Column 2: WhatsApp y Atención
+    const colA2X = MX + colAsesorW + 2;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("Contacto & WhatsApp:", colA2X + 2, asesorBoxY + 12);
+
+    let displayPhone = advisorPhone || "+593 99 038 8493";
+    const rawDigits = displayPhone.replace(/\D/g, "");
+    if (rawDigits.length >= 9) {
+      const formattedNumber = rawDigits.startsWith("593") 
+        ? `+${rawDigits.replace(/(\d{3})(\d{2})(\d{3})(\d{4})/, "$1 $2 $3 $4")}`
+        : `+593 ${rawDigits.replace(/^0/, "").replace(/(\d{2})(\d{3})(\d{4})/, "$1 $2 $3")}`;
+      displayPhone = formattedNumber;
+    }
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(15, 23, 42);
+    pdf.text(displayPhone, colA2X + 2, asesorBoxY + 17);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(advisorEmail ? `Email: ${advisorEmail}` : "Horario: Lunes a Viernes 08:30 - 18:00", colA2X + 2, asesorBoxY + 22);
+    pdf.text("Atención personalizada y soporte continuo", colA2X + 2, asesorBoxY + 26);
+
+    // Asesor Column 3: Garantía y Emisión
+    const colA3X = MX + (colAsesorW * 2) + 4;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("Soporte & Garantía:", colA3X + 2, asesorBoxY + 12);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7);
+    pdf.setTextColor(30, 41, 59);
+    pdf.text("• www.upconta.com", colA3X + 2, asesorBoxY + 16.5);
+    pdf.text("• Soporte técnico incluido 100% Cloud", colA3X + 2, asesorBoxY + 20.5);
+    pdf.text("• Actualizaciones tributarias SRI garantizadas", colA3X + 2, asesorBoxY + 24.5);
+    pdf.text("• Validez de cotización: 15 días calendario", colA3X + 2, asesorBoxY + 28.5);
+
+    // Bottom official statement
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.4);
+    pdf.line(MX, 280, PAGE_W - MX, 280);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("UPCONTA — PLATAFORMA INTEGRAL DE SOFTWARE CONTABLE Y ERP", PAGE_W / 2, 285, { align: "center" });
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text("Documento oficial emitido por UpConta para distribución y demostración técnica", PAGE_W / 2, 289, { align: "center" });
 
     // ----------------- PAGE 2: TECHNICAL DETAILS -----------------
     pdf.addPage();
