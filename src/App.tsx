@@ -47,7 +47,8 @@ import {
   Flame,
   BarChart3,
   Landmark,
-  Printer
+  Printer,
+  FileDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -1104,102 +1105,870 @@ export default function App() {
           subY += 4.5;
         });
 
-        // Box border
-        const totalBoxH = Math.max(subY - contentStartY + 2, 70);
-        pdf.setDrawColor(203, 213, 225);
-        pdf.setLineWidth(0.3);
-        pdf.rect(colX, contentStartY, colW, totalBoxH, "S");
-      });
-    } else if (modulosList.length === 3) {
-      // 3 Columns
-      const colW = (CONTENT_W - 6) / 3; // ~58mm
-      modulosList.forEach((modName, idx) => {
-        const colX = MX + (idx * (colW + 3));
-        const subList = DETALLE_SUBMODULOS[modName] || [];
+          const totalBoxH = 142;
+          pdf.setDrawColor(203, 213, 225);
+          pdf.setLineWidth(0.3);
+          pdf.rect(colX, contentStartY, colW, totalBoxH, "S");
+        });
+      } else if (modulosList.length === 3) {
+        // 3 Columns
+        const colW = (CONTENT_W - 6) / 3; // ~58mm
+        modulosList.forEach((modName, idx) => {
+          const colX = MX + (idx * (colW + 3));
+          const subList = DETALLE_SUBMODULOS[modName] || [];
 
-        pdf.setFillColor(11, 37, 69);
-        pdf.rect(colX, contentStartY, colW, 5.5, "F");
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(6.8);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), contentStartY + 3.8, { align: "center" });
+          pdf.setFillColor(11, 37, 69);
+          pdf.rect(colX, contentStartY, colW, 5.5, "F");
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(6.8);
+          pdf.setTextColor(255, 255, 255);
+          pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), contentStartY + 3.8, { align: "center" });
 
-        let subY = contentStartY + 9.5;
-        subList.forEach((subItem) => {
-          const cleanItem = subItem.replace(/^##/, "").trim();
-          pdf.setFont("helvetica", "normal");
+          let subY = contentStartY + 9.5;
+          subList.forEach((subItem) => {
+            const cleanItem = subItem.replace(/^##/, "").trim();
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(6.5);
+            pdf.setTextColor(30, 41, 59);
+            pdf.text(`• ${cleanItem}`, colX + 2.5, subY);
+            subY += 4.2;
+          });
+
+          const totalBoxH = 142;
+          pdf.setDrawColor(203, 213, 225);
+          pdf.setLineWidth(0.3);
+          pdf.rect(colX, contentStartY, colW, totalBoxH, "S");
+        });
+      } else {
+        // 4 or more modules: 3 Columns Grid with vertical packing
+        const colW = (CONTENT_W - 6) / 3;
+        const colPositions = [MX, MX + colW + 3, MX + (colW * 2) + 6];
+        const colYTracker = [contentStartY, contentStartY, contentStartY];
+
+        modulosList.forEach((modName) => {
+          let targetCol = 0;
+          if (colYTracker[1] < colYTracker[targetCol]) targetCol = 1;
+          if (colYTracker[2] < colYTracker[targetCol]) targetCol = 2;
+
+          const colX = colPositions[targetCol];
+          const cardStartY = colYTracker[targetCol];
+          const subList = DETALLE_SUBMODULOS[modName] || [];
+
+          pdf.setFillColor(11, 37, 69);
+          pdf.rect(colX, cardStartY, colW, 5, "F");
+          pdf.setFont("helvetica", "bold");
           pdf.setFontSize(6.5);
-          pdf.setTextColor(30, 41, 59);
-          pdf.text(`• ${cleanItem}`, colX + 2.5, subY);
-          subY += 4.2;
+          pdf.setTextColor(255, 255, 255);
+          pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), cardStartY + 3.5, { align: "center" });
+
+          let subY = cardStartY + 8.5;
+          subList.forEach((subItem) => {
+            const cleanItem = subItem.replace(/^##/, "").trim();
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(6);
+            pdf.setTextColor(30, 41, 59);
+            pdf.text(`• ${cleanItem}`, colX + 2, subY);
+            subY += 3.4;
+          });
+
+          const cardH = subY - cardStartY + 1.5;
+          pdf.setDrawColor(203, 213, 225);
+          pdf.setLineWidth(0.3);
+          pdf.rect(colX, cardStartY, colW, cardH, "S");
+
+          colYTracker[targetCol] = cardStartY + cardH + 3;
         });
+      }
 
-        const totalBoxH = Math.max(subY - contentStartY + 2, 70);
-        pdf.setDrawColor(203, 213, 225);
-        pdf.setLineWidth(0.3);
-        pdf.rect(colX, contentStartY, colW, totalBoxH, "S");
-      });
-    } else {
-      // 4 or more modules: 3 Columns Grid with vertical packing
-      const colW = (CONTENT_W - 6) / 3;
-      const colPositions = [MX, MX + colW + 3, MX + (colW * 2) + 6];
-      const colYTracker = [contentStartY, contentStartY, contentStartY];
+      // ==========================================
+      // SECCIÓN OFICIAL DE DATOS DEL ASESOR ASIGNADO (y = 241)
+      // ==========================================
+      const asesorBoxY = 241;
+      const asesorBoxH = 34;
 
-      modulosList.forEach((modName) => {
-        let targetCol = 0;
-        if (colYTracker[1] < colYTracker[targetCol]) targetCol = 1;
-        if (colYTracker[2] < colYTracker[targetCol]) targetCol = 2;
+      pdf.setFillColor(11, 37, 69);
+      pdf.rect(MX, asesorBoxY, CONTENT_W, 6.5, "F");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("DATOS DEL ASESOR COMERCIAL ASIGNADO — UPCONTA ECUADOR", PAGE_W / 2, asesorBoxY + 4.5, { align: "center" });
 
-        const colX = colPositions[targetCol];
-        const cardStartY = colYTracker[targetCol];
-        const subList = DETALLE_SUBMODULOS[modName] || [];
+      pdf.setFillColor(248, 250, 252);
+      pdf.rect(MX, asesorBoxY + 6.5, CONTENT_W, asesorBoxH - 6.5, "F");
+      pdf.setDrawColor(203, 213, 225);
+      pdf.setLineWidth(0.3);
+      pdf.rect(MX, asesorBoxY, CONTENT_W, asesorBoxH, "S");
 
-        pdf.setFillColor(11, 37, 69);
-        pdf.rect(colX, cardStartY, colW, 5, "F");
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(6.5);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), cardStartY + 3.5, { align: "center" });
+      const colAsesorW = (CONTENT_W - 4) / 3;
 
-        let subY = cardStartY + 8.5;
-        subList.forEach((subItem) => {
-          const cleanItem = subItem.replace(/^##/, "").trim();
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(6);
-          pdf.setTextColor(30, 41, 59);
-          pdf.text(`• ${cleanItem}`, colX + 2, subY);
-          subY += 3.4;
-        });
+      // Columna 1: Asesor y Cargo
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text("Asesor Comercial:", MX + 4, asesorBoxY + 12);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.setTextColor(234, 88, 12);
+      pdf.text(advisorName || "Equipo Comercial UpConta", MX + 4, asesorBoxY + 17);
 
-        const cardH = subY - cardStartY + 1.5;
-        pdf.setDrawColor(203, 213, 225);
-        pdf.setLineWidth(0.3);
-        pdf.rect(colX, cardStartY, colW, cardH, "S");
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text("Especialista en Soluciones Contables y ERP", MX + 4, asesorBoxY + 22);
+      pdf.text("UpConta Software Cloud Ecuador", MX + 4, asesorBoxY + 26);
 
-        colYTracker[targetCol] = cardStartY + cardH + 3;
-      });
-    }
+      // Columna 2: Contacto & WhatsApp
+      const colA2X = MX + colAsesorW + 2;
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text("Contacto & WhatsApp:", colA2X + 2, asesorBoxY + 12);
 
-    // ==========================================
-    // FOOTER
-    // ==========================================
-    pdf.setDrawColor(203, 213, 225);
-    pdf.setLineWidth(0.4);
-    pdf.line(MX, 283, PAGE_W - MX, 283);
+      let displayPhone = advisorPhone || "+593 99 038 8493";
+      const rawDigits = displayPhone.replace(/\D/g, "");
+      if (rawDigits.length >= 9) {
+        const formattedNumber = rawDigits.startsWith("593") 
+          ? `+${rawDigits.replace(/(\d{3})(\d{2})(\d{3})(\d{4})/, "$1 $2 $3 $4")}`
+          : `+593 ${rawDigits.replace(/^0/, "").replace(/(\d{2})(\d{3})(\d{4})/, "$1 $2 $3")}`;
+        displayPhone = formattedNumber;
+      }
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(displayPhone, colA2X + 2, asesorBoxY + 17);
 
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(7.5);
-    pdf.setTextColor(11, 37, 69);
-    pdf.text("UPCONTA — PLATAFORMA INTEGRAL DE SOFTWARE CONTABLE Y ERP", PAGE_W / 2, 287.5, { align: "center" });
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(advisorEmail ? `Email: ${advisorEmail}` : "Horario: Lunes a Viernes 08:30 - 18:00", colA2X + 2, asesorBoxY + 22);
+      pdf.text("Atención personalizada y soporte continuo", colA2X + 2, asesorBoxY + 26);
 
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(6.5);
-    pdf.setTextColor(100, 116, 139);
-    pdf.text("Documento oficial emitido por UpConta para distribución y demostración técnica", PAGE_W / 2, 291.5, { align: "center" });
+      // Columna 3: Soporte & Garantía
+      const colA3X = MX + (colAsesorW * 2) + 4;
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text("Soporte & Garantía:", colA3X + 2, asesorBoxY + 12);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text("• www.upconta.com", colA3X + 2, asesorBoxY + 16.5);
+      pdf.text("• Soporte técnico incluido 100% Cloud", colA3X + 2, asesorBoxY + 20.5);
+      pdf.text("• Actualizaciones tributarias SRI garantizadas", colA3X + 2, asesorBoxY + 24.5);
+      pdf.text("• Validez de cotización: 15 días calendario", colA3X + 2, asesorBoxY + 28.5);
+
+      // ==========================================
+      // FOOTER
+      // ==========================================
+      pdf.setDrawColor(203, 213, 225);
+      pdf.setLineWidth(0.4);
+      pdf.line(MX, 280, PAGE_W - MX, 280);
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text("UPCONTA — PLATAFORMA INTEGRAL DE SOFTWARE CONTABLE Y ERP", PAGE_W / 2, 284.5, { align: "center" });
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text("Documento oficial emitido por UpConta para distribución y demostración técnica", PAGE_W / 2, 288.5, { align: "center" });
 
     const safePlanName = plan.nombre.replace(/[^a-zA-Z0-9]/g, "-");
     const priceSuffix = conPrecio ? "ConPrecio" : "SinPrecio";
     pdf.save(`Ficha-Tecnica-${safePlanName}-${priceSuffix}.pdf`);
+  };
+
+  // COMPLETE MULTI-PLAN BROCHURE PDF GENERATION (BROCHURE OFICIAL POR CATEGORÍA)
+  const handleGenerarBrochurePDF = (targetCategory?: "facturacion" | "erp" | "contador" | "cloud" | string) => {
+    const categoryKey = (targetCategory || tipoPlan) as "facturacion" | "erp" | "contador" | "cloud";
+    const plansToInclude = PLANES_DATA[categoryKey] || [];
+    if (plansToInclude.length === 0) {
+      alert("No se encontraron planes disponibles para esta categoría.");
+      return;
+    }
+
+    const pdf = new jsPDF("p", "mm", "a4");
+    const PAGE_W = 210;
+    const PAGE_H = 297;
+    const MX = 14;
+    const CONTENT_W = PAGE_W - (MX * 2); // 182mm
+    const todayFormatted = new Date().toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const totalPages = 1 + plansToInclude.length;
+
+    // Helper: Draw UpConta Vector/Canvas Logo
+    const drawUpContaLogo = (doc: jsPDF, x: number = MX, y: number = 11) => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 520;
+        canvas.height = 130;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, 520, 130);
+          ctx.font = "900 102px system-ui, -apple-system, BlinkMacSystemFont, 'Montserrat', sans-serif";
+          ctx.fillStyle = "#FF5500";
+          ctx.fillText("Up", 10, 92);
+
+          ctx.fillStyle = "#0B2545";
+          ctx.fillText("Conta", 152, 92);
+
+          ctx.save();
+          ctx.translate(426, 12);
+          ctx.strokeStyle = "#FF5500";
+          ctx.lineWidth = 18;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+
+          ctx.beginPath();
+          ctx.moveTo(12, 50);
+          ctx.lineTo(52, 50);
+          ctx.arcTo(68, 50, 68, 34, 16);
+          ctx.lineTo(68, 10);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(50, 22);
+          ctx.lineTo(68, 4);
+          ctx.lineTo(86, 22);
+          ctx.stroke();
+          ctx.restore();
+
+          const logoData = canvas.toDataURL("image/png");
+          doc.addImage(logoData, "PNG", x, y, 48, 12);
+        }
+      } catch {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(22);
+        doc.setTextColor(255, 85, 0);
+        doc.text("Up", x, y + 10);
+        doc.setTextColor(11, 37, 69);
+        doc.text("Conta", x + 12, y + 10);
+      }
+    };
+
+    // Helper: Draw Advisor and Bottom Official Footer
+    const drawAdvisorAndFooter = (doc: jsPDF, pageNum: number) => {
+      const asesorBoxY = 241;
+      const asesorBoxH = 34;
+
+      doc.setFillColor(11, 37, 69);
+      doc.rect(MX, asesorBoxY, CONTENT_W, 6.5, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(255, 255, 255);
+      doc.text("DATOS DEL ASESOR COMERCIAL ASIGNADO — UPCONTA ECUADOR", PAGE_W / 2, asesorBoxY + 4.5, { align: "center" });
+
+      doc.setFillColor(248, 250, 252);
+      doc.rect(MX, asesorBoxY + 6.5, CONTENT_W, asesorBoxH - 6.5, "F");
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.3);
+      doc.rect(MX, asesorBoxY, CONTENT_W, asesorBoxH, "S");
+
+      const colAsesorW = (CONTENT_W - 4) / 3;
+
+      // Col 1: Asesor y Cargo
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(11, 37, 69);
+      doc.text("Asesor Comercial:", MX + 4, asesorBoxY + 12);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(234, 88, 12);
+      doc.text(advisorName || "Equipo Comercial UpConta", MX + 4, asesorBoxY + 17);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Especialista en Soluciones Contables y ERP", MX + 4, asesorBoxY + 22);
+      doc.text("UpConta Software Cloud Ecuador", MX + 4, asesorBoxY + 26);
+
+      // Col 2: Contacto & WhatsApp
+      const colA2X = MX + colAsesorW + 2;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(11, 37, 69);
+      doc.text("Contacto & WhatsApp:", colA2X + 2, asesorBoxY + 12);
+
+      let displayPhone = advisorPhone || "+593 99 038 8493";
+      const rawDigits = displayPhone.replace(/\D/g, "");
+      if (rawDigits.length >= 9) {
+        const formattedNumber = rawDigits.startsWith("593") 
+          ? `+${rawDigits.replace(/(\d{3})(\d{2})(\d{3})(\d{4})/, "$1 $2 $3 $4")}`
+          : `+593 ${rawDigits.replace(/^0/, "").replace(/(\d{2})(\d{3})(\d{4})/, "$1 $2 $3")}`;
+        displayPhone = formattedNumber;
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(displayPhone, colA2X + 2, asesorBoxY + 17);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text(advisorEmail ? `Email: ${advisorEmail}` : "Horario: Lunes a Viernes 08:30 - 18:00", colA2X + 2, asesorBoxY + 22);
+      doc.text("Atención personalizada y soporte continuo", colA2X + 2, asesorBoxY + 26);
+
+      // Col 3: Soporte & Garantía
+      const colA3X = MX + (colAsesorW * 2) + 4;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(11, 37, 69);
+      doc.text("Soporte & Garantía:", colA3X + 2, asesorBoxY + 12);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(30, 41, 59);
+      doc.text("• www.upconta.com", colA3X + 2, asesorBoxY + 16.5);
+      doc.text("• Soporte técnico incluido 100% Cloud", colA3X + 2, asesorBoxY + 20.5);
+      doc.text("• Actualizaciones tributarias SRI garantizadas", colA3X + 2, asesorBoxY + 24.5);
+      doc.text("• Validez de cotización: 15 días calendario", colA3X + 2, asesorBoxY + 28.5);
+
+      // Bottom official footer
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.4);
+      doc.line(MX, 280, PAGE_W - MX, 280);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(11, 37, 69);
+      doc.text("UPCONTA — PLATAFORMA INTEGRAL DE SOFTWARE CONTABLE Y ERP", PAGE_W / 2, 284.5, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Documento oficial emitido por UpConta • Pág. ${pageNum} de ${totalPages}`, PAGE_W / 2, 288.5, { align: "center" });
+    };
+
+    // Category Titles & Info
+    let catTitle = "FACTURACIÓN ELECTRÓNICA & COMPROBANTES SRI";
+    let catFileTitle = "Facturacion-Electronica";
+    let catDesc = "Planes de facturación electrónica inmediata autorizada por el SRI, proformas, cotizaciones, notas de crédito, guías de remisión, catálogo de productos y app móvil.";
+
+    if (categoryKey === "erp") {
+      catTitle = "SISTEMAS ERP ADMINISTRATIVO COMPLETO";
+      catFileTitle = "ERP-Administrativo";
+      catDesc = "Soluciones ERP 100% Cloud: contabilidad bajo NIIF, nómina ecuatoriana, inventarios multibodega, tesorería, conciliaciones bancarias, punto de venta y restaurantes.";
+    } else if (categoryKey === "contador") {
+      catTitle = "PLANES PARA CONTADORES & ESTUDIOS CONTABLES";
+      catFileTitle = "Planes-Contadores";
+      catDesc = "Planes multi-empresa y multi-RUC para profesionales y firmas contables. Gestión tributaria automatizada (ATS, 103, 104), balances consolidados y estados financieros.";
+    } else if (categoryKey === "cloud") {
+      catTitle = "SERVIDORES ERP VPS CLOUD ENTERPRISE";
+      catFileTitle = "ERP-Cloud-Enterprise";
+      catDesc = "Infraestructura dedicada en la nube con base de datos independiente, alta transaccionalidad, multi-RUC y soporte prioritario especializado.";
+    }
+
+    // ==========================================
+    // PAGE 1: RESUMEN EJECUTIVO & MATRIZ COMPARATIVA
+    // ==========================================
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, PAGE_W, PAGE_H, "F");
+
+    drawUpContaLogo(pdf, MX, 11);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10.5);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text("BROCHURE OFICIAL DE PLANES & SERVICIOS", PAGE_W - MX, 14, { align: "right" });
+
+    pdf.setFontSize(13);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text(catTitle, PAGE_W - MX, 20.5, { align: "right" });
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(`UPCONTA • ECUADOR • ${todayFormatted}`, PAGE_W - MX, 25.5, { align: "right" });
+
+    // Separator line
+    pdf.setDrawColor(11, 37, 69);
+    pdf.setLineWidth(0.7);
+    pdf.line(MX, 28.5, PAGE_W - MX, 28.5);
+
+    // Intro Banner Card
+    pdf.setFillColor(241, 245, 249);
+    pdf.roundedRect(MX, 32, CONTENT_W, 16, 2, 2, "F");
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.3);
+    pdf.roundedRect(MX, 32, CONTENT_W, 16, 2, 2, "S");
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(11, 37, 69);
+    pdf.text(`ALCANCE Y COBERTURA OFICIAL: ${catTitle}`, MX + 4, 37.5);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(6.8);
+    pdf.setTextColor(71, 85, 105);
+    const descLines = pdf.splitTextToSize(catDesc, CONTENT_W - 8);
+    pdf.text(descLines, MX + 4, 42.5);
+
+    // Comparative Table Title Header
+    const tableStartY = 51.5;
+    pdf.setFillColor(11, 37, 69);
+    pdf.rect(MX, tableStartY, CONTENT_W, 6.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("MATRIZ COMPARATIVA Y LISTA OFICIAL DE PRECIOS", PAGE_W / 2, tableStartY + 4.5, { align: "center" });
+
+    // Table Column Headers
+    const colH = 6;
+    const thY = tableStartY + 6.5;
+    pdf.setFillColor(226, 232, 240);
+    pdf.rect(MX, thY, CONTENT_W, colH, "F");
+    pdf.setDrawColor(203, 213, 225);
+    pdf.rect(MX, thY, CONTENT_W, colH, "S");
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(15, 23, 42);
+
+    const cX_Plan = MX + 3;
+    const cX_Tier = MX + 42;
+    const cX_Comp = MX + 76;
+    const cX_User = MX + 108;
+    const cX_Ruc = MX + 128;
+    const cX_Base = MX + 148;
+    const cX_Total = MX + CONTENT_W - 3;
+
+    pdf.text("PLAN / MODELO", cX_Plan, thY + 4.2);
+    pdf.text("TIER", cX_Tier, thY + 4.2);
+    pdf.text("COMPROBANTES SRI", cX_Comp, thY + 4.2);
+    pdf.text("USUARIOS", cX_User, thY + 4.2);
+    pdf.text("RUCs", cX_Ruc, thY + 4.2);
+    pdf.text("PRECIO BASE", cX_Base, thY + 4.2);
+    pdf.text("TOTAL C/IVA (15%)", cX_Total, thY + 4.2, { align: "right" });
+
+    // Render Table Rows
+    let currentTrY = thY + colH;
+    const rowHeight = plansToInclude.length > 6 ? 10.5 : 12;
+
+    plansToInclude.forEach((p, idx) => {
+      if (idx % 2 === 1) {
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(MX, currentTrY, CONTENT_W, rowHeight, "F");
+      }
+      pdf.setDrawColor(226, 232, 240);
+      pdf.setLineWidth(0.2);
+      pdf.rect(MX, currentTrY, CONTENT_W, rowHeight, "S");
+
+      const metrics = extractQuickMetrics(p.modulos);
+
+      // Plan Name
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text(p.nombre, cX_Plan, currentTrY + 4.5);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(5.8);
+      pdf.setTextColor(100, 116, 139);
+      const modCount = p.modulos.length;
+      pdf.text(`${modCount} módulos incluidos`, cX_Plan, currentTrY + 8);
+
+      // Tier
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.2);
+      pdf.setTextColor(51, 65, 85);
+      pdf.text(p.tier.replace(/_/g, " ").toUpperCase(), cX_Tier, currentTrY + 6);
+
+      // Comprobantes
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.2);
+      pdf.setTextColor(30, 41, 59);
+      const compLabel = categoryKey === "contador" 
+        ? (p.tier === "contador_tax" ? "Tax Ilimitado SRI" : "Opcional / SRI") 
+        : (metrics.comprobantes || (p.comprobantes || "Ilimitados"));
+      pdf.text(compLabel, cX_Comp, currentTrY + 6);
+
+      // Usuarios
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.2);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text(metrics.usuarios || (p.usuarios || "1 Usuario"), cX_User, currentTrY + 6);
+
+      // Empresas / RUCs
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(6.2);
+      pdf.setTextColor(11, 37, 69);
+      const rucLabel = p.ruc ? `${p.ruc}` : (p.valor === "ilimitadas" || p.valor === "tax_ilimitado" ? "Ilimitadas" : (p.valor ? `${p.valor} RUC` : (metrics.empresas || "1 RUC")));
+      pdf.text(rucLabel, cX_Ruc, currentTrY + 6);
+
+      // Precios
+      if (categoryKey === "erp") {
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(6.2);
+        pdf.setTextColor(30, 41, 59);
+        pdf.text(`$${p.precio.toFixed(2)}/m`, cX_Base, currentTrY + 4.5);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(5.8);
+        pdf.setTextColor(100, 116, 139);
+        const anualBase = p.precioAnual || (p.precio * 12);
+        pdf.text(`($${anualBase.toFixed(2)}/año)`, cX_Base, currentTrY + 8.2);
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7.2);
+        pdf.setTextColor(234, 88, 12);
+        pdf.text(`$${(anualBase * 1.15).toFixed(2)} USD`, cX_Total, currentTrY + 6, { align: "right" });
+      } else {
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(6.5);
+        pdf.setTextColor(30, 41, 59);
+        pdf.text(`$${p.precio.toFixed(2)} USD`, cX_Base, currentTrY + 6);
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7.2);
+        pdf.setTextColor(234, 88, 12);
+        const totalConIva = p.precio * 1.15;
+        pdf.text(`$${totalConIva.toFixed(2)} USD`, cX_Total, currentTrY + 6, { align: "right" });
+      }
+
+      currentTrY += rowHeight;
+    });
+
+    // 3 Feature Cards under table
+    const cardY = currentTrY + 3.5;
+    const cardW = (CONTENT_W - 6) / 3;
+    const cardH = 22;
+
+    const cards = [
+      {
+        title: "INFRAESTRUCTURA 100% CLOUD",
+        desc: "Acceso seguro 24/7 sin instalaciones locales. Respaldo automático y disponibilidad de datos garantizada."
+      },
+      {
+        title: "NORMATIVA SRI ACTUALIZADA",
+        desc: "Cumplimiento tributario vigente en Ecuador con soporte permanente para cambios en leyes y formatos."
+      },
+      {
+        title: "SOPORTE Y CAPACITACIÓN",
+        desc: "Acompañamiento especializado, asistencia técnica por WhatsApp y entrenamientos continuos incluidos."
+      }
+    ];
+
+    cards.forEach((c, cIdx) => {
+      const cX = MX + (cIdx * (cardW + 3));
+      pdf.setFillColor(248, 250, 252);
+      pdf.roundedRect(cX, cardY, cardW, cardH, 1.5, 1.5, "F");
+      pdf.setDrawColor(203, 213, 225);
+      pdf.setLineWidth(0.3);
+      pdf.roundedRect(cX, cardY, cardW, cardH, 1.5, 1.5, "S");
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(6.2);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text(c.title, cX + 2.5, cardY + 5);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(5.5);
+      pdf.setTextColor(71, 85, 105);
+      const lines = pdf.splitTextToSize(c.desc, cardW - 5);
+      pdf.text(lines, cX + 2.5, cardY + 9.5);
+    });
+
+    drawAdvisorAndFooter(pdf, 1);
+
+    // ==========================================
+    // PAGES 2 TO N+1: FICHAS TÉCNICAS INDIVIDUALES POR PLAN
+    // ==========================================
+    plansToInclude.forEach((plan, planIdx) => {
+      pdf.addPage();
+      const pageNum = planIdx + 2;
+
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(0, 0, PAGE_W, PAGE_H, "F");
+
+      drawUpContaLogo(pdf, MX, 11);
+
+      // Top Header: Right aligned Official Title
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10.5);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text("FICHA TÉCNICA OFICIAL DE PLAN", PAGE_W - MX, 14, { align: "right" });
+
+      pdf.setFontSize(14);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text(plan.nombre.toUpperCase(), PAGE_W - MX, 20.5, { align: "right" });
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(`PLAN ${planIdx + 1} DE ${plansToInclude.length} • UPCONTA ECUADOR`, PAGE_W - MX, 25.5, { align: "right" });
+
+      // Blue Accent separator line
+      pdf.setDrawColor(11, 37, 69);
+      pdf.setLineWidth(0.7);
+      pdf.line(MX, 28.5, PAGE_W - MX, 28.5);
+
+      // 2 TOP BOXES SIDE BY SIDE (y = 31.5)
+      const boxTopY = 31.5;
+      const boxW = (CONTENT_W - 6) / 2; // 88mm
+      const boxH = 43;
+      const box1X = MX;
+      const box2X = MX + boxW + 6;
+
+      const metrics = extractQuickMetrics(plan.modulos);
+
+      // BOX 1: ESPECIFICACIONES & LÍMITES
+      pdf.setFillColor(11, 37, 69);
+      pdf.rect(box1X, boxTopY, boxW, 6.5, "F");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("ESPECIFICACIONES & LÍMITES", box1X + (boxW / 2), boxTopY + 4.5, { align: "center" });
+
+      pdf.setDrawColor(203, 213, 225);
+      pdf.setLineWidth(0.3);
+      pdf.rect(box1X, boxTopY, boxW, boxH, "S");
+
+      let compText = metrics.comprobantes || (plan.comprobantes || "Comprobantes Ilimitados");
+      if (categoryKey === "contador") {
+        compText = plan.tier === "contador_tax" ? "Tax Ilimitado SRI" : "No incluye comprobantes (Opcional)";
+      }
+
+      let rucText = plan.ruc ? `${plan.ruc} Empresas` : (plan.valor === "ilimitadas" || plan.valor === "tax_ilimitado" ? "Empresas Ilimitadas" : (plan.valor ? `${plan.valor} Empresas` : (metrics.empresas || "1 Empresa")));
+
+      const specRows = [
+        { label: "Plan:", value: plan.nombre },
+        { label: "Categoría / Tier:", value: plan.tier.toUpperCase() },
+        { label: "Comprobantes SRI:", value: compText },
+        { label: "Usuarios Habilitados:", value: metrics.usuarios || (plan.usuarios || "1 Usuario") },
+        { label: "Límite Empresas / RUC:", value: rucText }
+      ];
+
+      let rowY = boxTopY + 11.5;
+      specRows.forEach((r, sIdx) => {
+        if (sIdx % 2 === 1) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(box1X + 0.5, rowY - 3.5, boxW - 1, 6.8, "F");
+        }
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(11, 37, 69);
+        pdf.text(r.label, box1X + 3.5, rowY);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(30, 41, 59);
+        pdf.text(r.value, box1X + boxW - 3.5, rowY, { align: "right" });
+
+        rowY += 7;
+      });
+
+      // BOX 2: DESGLOSE FINANCIERO OFICIAL
+      pdf.setFillColor(11, 37, 69);
+      pdf.rect(box2X, boxTopY, boxW, 6.5, "F");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("DESGLOSE FINANCIERO OFICIAL", box2X + (boxW / 2), boxTopY + 4.5, { align: "center" });
+
+      pdf.setDrawColor(203, 213, 225);
+      pdf.setLineWidth(0.3);
+      pdf.rect(box2X, boxTopY, boxW, boxH, "S");
+
+      if (categoryKey === "erp") {
+        const baseMensual = plan.precio;
+        const baseAnual = plan.precioAnual || (plan.precio * 12);
+        const ivaAnual = baseAnual * 0.15;
+        const totalAnual = baseAnual + ivaAnual;
+
+        const finRows = [
+          { label: "Precio Mensual:", value: `$${baseMensual.toFixed(2)} USD / mes` },
+          { label: "Precio Base Anual:", value: `$${baseAnual.toFixed(2)} USD` },
+          { label: "IVA Ecuador (15%):", value: `$${ivaAnual.toFixed(2)} USD` }
+        ];
+
+        let finY = boxTopY + 13;
+        finRows.forEach((r, fIdx) => {
+          if (fIdx % 2 === 1) {
+            pdf.setFillColor(248, 250, 252);
+            pdf.rect(box2X + 0.5, finY - 3.5, boxW - 1, 7.5, "F");
+          }
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(7.5);
+          pdf.setTextColor(11, 37, 69);
+          pdf.text(r.label, box2X + 3.5, finY);
+
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(7.5);
+          pdf.setTextColor(30, 41, 59);
+          pdf.text(r.value, box2X + boxW - 3.5, finY, { align: "right" });
+
+          finY += 7.5;
+        });
+
+        const totalBarY = boxTopY + boxH - 7.5;
+        pdf.setFillColor(11, 37, 69);
+        pdf.rect(box2X, totalBarY, boxW, 7.5, "F");
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text("TOTAL ESTIMADO CON IVA", box2X + 3.5, totalBarY + 5);
+
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(251, 191, 36);
+        pdf.text(`$${totalAnual.toFixed(2)} USD`, box2X + boxW - 3.5, totalBarY + 5, { align: "right" });
+      } else {
+        const basePrice = plan.precio;
+        const iva = basePrice * 0.15;
+        const total = basePrice + iva;
+
+        const finRows = [
+          { label: "Precio Base Plan:", value: `$${basePrice.toFixed(2)} USD` },
+          { label: "Modalidad de Pago:", value: "Pago Anual" },
+          { label: "IVA Ecuador (15%):", value: `$${iva.toFixed(2)} USD` }
+        ];
+
+        let finY = boxTopY + 13;
+        finRows.forEach((r, fIdx) => {
+          if (fIdx % 2 === 1) {
+            pdf.setFillColor(248, 250, 252);
+            pdf.rect(box2X + 0.5, finY - 3.5, boxW - 1, 7.5, "F");
+          }
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(7.5);
+          pdf.setTextColor(11, 37, 69);
+          pdf.text(r.label, box2X + 3.5, finY);
+
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(7.5);
+          pdf.setTextColor(30, 41, 59);
+          pdf.text(r.value, box2X + boxW - 3.5, finY, { align: "right" });
+
+          finY += 7.5;
+        });
+
+        const totalBarY = boxTopY + boxH - 7.5;
+        pdf.setFillColor(11, 37, 69);
+        pdf.rect(box2X, totalBarY, boxW, 7.5, "F");
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text("TOTAL ESTIMADO CON IVA", box2X + 3.5, totalBarY + 5);
+
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(251, 191, 36);
+        pdf.text(`$${total.toFixed(2)} USD`, box2X + boxW - 3.5, totalBarY + 5, { align: "right" });
+      }
+
+      // SECTION: DESGLOSE DE MÓDULOS TRONCALES
+      const modSectionY = boxTopY + boxH + 4; // ~78.5mm
+      pdf.setFillColor(11, 37, 69);
+      pdf.rect(MX, modSectionY, CONTENT_W, 6.5, "F");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(`DESGLOSE DE MÓDULOS TRONCALES INCLUIDOS EN EL PLAN (${plan.nombre.toUpperCase()})`, PAGE_W / 2, modSectionY + 4.5, { align: "center" });
+
+      const modulosList = MODULOS_POR_TIER[plan.tier] || ["ADMINISTRATIVO", "PRODUCCIÓN"];
+      const contentStartY = modSectionY + 8.5;
+
+      if (modulosList.length <= 2) {
+        const colW = (CONTENT_W - 5) / 2;
+        modulosList.forEach((modName, mIdx) => {
+          const colX = MX + (mIdx * (colW + 5));
+          const subList = DETALLE_SUBMODULOS[modName] || [];
+
+          pdf.setFillColor(11, 37, 69);
+          pdf.rect(colX, contentStartY, colW, 5.5, "F");
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(7);
+          pdf.setTextColor(255, 255, 255);
+          pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), contentStartY + 3.8, { align: "center" });
+
+          let subY = contentStartY + 9.5;
+          subList.forEach((subItem) => {
+            const cleanItem = subItem.replace(/^##/, "").trim();
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(6.8);
+            pdf.setTextColor(30, 41, 59);
+            pdf.text(`• ${cleanItem}`, colX + 3, subY);
+            subY += 4.5;
+          });
+
+          const totalBoxH = 142;
+          pdf.setDrawColor(203, 213, 225);
+          pdf.setLineWidth(0.3);
+          pdf.rect(colX, contentStartY, colW, totalBoxH, "S");
+        });
+      } else if (modulosList.length === 3) {
+        const colW = (CONTENT_W - 6) / 3;
+        modulosList.forEach((modName, mIdx) => {
+          const colX = MX + (mIdx * (colW + 3));
+          const subList = DETALLE_SUBMODULOS[modName] || [];
+
+          pdf.setFillColor(11, 37, 69);
+          pdf.rect(colX, contentStartY, colW, 5.5, "F");
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(6.8);
+          pdf.setTextColor(255, 255, 255);
+          pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), contentStartY + 3.8, { align: "center" });
+
+          let subY = contentStartY + 9.5;
+          subList.forEach((subItem) => {
+            const cleanItem = subItem.replace(/^##/, "").trim();
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(6.5);
+            pdf.setTextColor(30, 41, 59);
+            pdf.text(`• ${cleanItem}`, colX + 2.5, subY);
+            subY += 4.2;
+          });
+
+          const totalBoxH = 142;
+          pdf.setDrawColor(203, 213, 225);
+          pdf.setLineWidth(0.3);
+          pdf.rect(colX, contentStartY, colW, totalBoxH, "S");
+        });
+      } else {
+        const colW = (CONTENT_W - 6) / 3;
+        const colPositions = [MX, MX + colW + 3, MX + (colW * 2) + 6];
+        const colYTracker = [contentStartY, contentStartY, contentStartY];
+
+        modulosList.forEach((modName) => {
+          let targetCol = 0;
+          if (colYTracker[1] < colYTracker[targetCol]) targetCol = 1;
+          if (colYTracker[2] < colYTracker[targetCol]) targetCol = 2;
+
+          const colX = colPositions[targetCol];
+          const cardStartY = colYTracker[targetCol];
+          const subList = DETALLE_SUBMODULOS[modName] || [];
+
+          pdf.setFillColor(11, 37, 69);
+          pdf.rect(colX, cardStartY, colW, 5, "F");
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(6.5);
+          pdf.setTextColor(255, 255, 255);
+          pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), cardStartY + 3.5, { align: "center" });
+
+          let subY = cardStartY + 8.5;
+          subList.forEach((subItem) => {
+            const cleanItem = subItem.replace(/^##/, "").trim();
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(6);
+            pdf.setTextColor(30, 41, 59);
+            pdf.text(`• ${cleanItem}`, colX + 2, subY);
+            subY += 3.4;
+          });
+
+          const cardH = subY - cardStartY + 1.5;
+          pdf.setDrawColor(203, 213, 225);
+          pdf.setLineWidth(0.3);
+          pdf.rect(colX, cardStartY, colW, cardH, "S");
+
+          colYTracker[targetCol] = cardStartY + cardH + 3;
+        });
+      }
+
+      drawAdvisorAndFooter(pdf, pageNum);
+    });
+
+    pdf.save(`Brochure-UpConta-${catFileTitle}.pdf`);
   };
 
   // HIGH-FIDELITY PDF PROPOSAL GENERATION (jsPDF)
@@ -2243,11 +3012,44 @@ export default function App() {
               </p>
             </div>
             
-            {/* Quick stats indicators */}
-            <div className="flex gap-4 text-xs font-medium text-slate-500 flex-wrap">
-              <div>Facturación: <span className="text-[#0B2545] font-bold">8 planes</span></div>
-              <div className="border-l border-slate-200 pl-4">ERP: <span className="text-[#0B2545] font-bold">3 planes</span></div>
-              <div className="border-l border-slate-200 pl-4">Contador: <span className="text-[#0B2545] font-bold">6 planes</span></div>
+            {/* Quick stats indicators & Advisor Selector & Brochure Button */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="hidden xl:flex gap-3 text-xs font-medium text-slate-500 mr-1">
+                <div>Facturación: <span className="text-[#0B2545] font-bold">8</span></div>
+                <div className="border-l border-slate-200 pl-3">ERP: <span className="text-[#0B2545] font-bold">3</span></div>
+                <div className="border-l border-slate-200 pl-3">Contador: <span className="text-[#0B2545] font-bold">6</span></div>
+              </div>
+
+              {/* Selector de Asesor Comercial sincronizado */}
+              <div className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs transition-colors">
+                <Users className="w-3.5 h-3.5 text-[#0B2545] shrink-0" />
+                <span className="text-[11px] font-bold text-slate-600 shrink-0">Asesor:</span>
+                <select
+                  id="select-advisor-plan-tab"
+                  value={selectedAdvisorKey}
+                  onChange={(e) => handleSelectAdvisorKey(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-[#0B2545] focus:outline-none cursor-pointer pr-1"
+                  title="Seleccionar Asesor Comercial para Brochures y Fichas Técnicas"
+                >
+                  <option value="">-- Seleccionar Asesor --</option>
+                  {Object.entries(ASESORES_DATA).map(([key, as]) => (
+                    <option key={key} value={key}>
+                      {as.nombre} ({as.telefono})
+                    </option>
+                  ))}
+                  <option value="custom">Otro (Manual)</option>
+                </select>
+              </div>
+
+              <button
+                id="btn-brochure-planes"
+                onClick={() => handleGenerarBrochurePDF(tipoPlan)}
+                className="px-4 py-2 bg-[#0B2545] hover:bg-[#003566] text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-md hover:shadow-lg active:scale-95 flex items-center gap-2 border border-[#0B2545]/20 shrink-0"
+                title={`Descargar Brochure en PDF con todos los planes de ${tipoPlan === "facturacion" ? "Facturación Electrónica" : tipoPlan === "erp" ? "ERP Administrativo" : "Planes para Contadores"}`}
+              >
+                <FileDown className="w-4 h-4 text-orange-400 shrink-0" />
+                <span>Brochure {tipoPlan === "facturacion" ? "Facturación" : tipoPlan === "erp" ? "ERP" : "Contadores"}</span>
+              </button>
             </div>
           </div>
 
