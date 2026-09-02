@@ -28,6 +28,7 @@ const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwRz2QlL1JYjPI
 const IVA_FACTOR = 1.15;
 
 const ADICIONALES_PRECIOS: Record<string, number> = {
+  "IMPUESTOS": 40 * IVA_FACTOR,
   "CONTABILIDAD": 75 * IVA_FACTOR,
   "NOMINA": 75 * IVA_FACTOR,
   "TESORERIA": 75 * IVA_FACTOR,
@@ -38,7 +39,7 @@ const ADICIONALES_PRECIOS: Record<string, number> = {
   "POWER": 55 * IVA_FACTOR,
 };
 
-const ADICIONALES_BASE = ["CONTABILIDAD", "NOMINA", "TESORERIA", "ACTIVOS FIJOS", "RESTAURANTES"];
+const ADICIONALES_BASE = ["IMPUESTOS", "CONTABILIDAD", "NOMINA", "TESORERIA", "ACTIVOS FIJOS", "RESTAURANTES"];
 const ADICIONALES_CONTADOR = ["UP LIGHT", "BASE", "POWER"];
 
 const ASESORES: Record<string, string> = {

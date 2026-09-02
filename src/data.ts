@@ -260,6 +260,7 @@ export const FIRMAS_DATA: FirmaElectronica[] = [
 ];
 
 export const ADICIONALES_ESTANDAR: AdicionalItem[] = [
+  { valor: "IMPUESTOS", precio: 40.00, texto: "Impuestos ($40.00)" },
   { valor: "TESORERÍA", precio: 75.00, texto: "Tesorería ($75.00)" },
   { valor: "NÓMINA", precio: 75.00, texto: "Nómina ($75.00)" },
   { valor: "ACTIVOS FIJOS", precio: 75.00, texto: "Activos Fijos ($75.00)" },

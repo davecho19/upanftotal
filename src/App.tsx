@@ -48,7 +48,9 @@ import {
   BarChart3,
   Landmark,
   Printer,
-  FileDown
+  FileDown,
+  MessageSquare,
+  Youtube
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -73,6 +75,8 @@ import { VentasModule } from "./components/VentasModule";
 import { ContadorModule } from "./components/ContadorModule";
 import { DashboardModule } from "./components/DashboardModule";
 import { RallyModule } from "./components/RallyModule";
+import { LinksModule } from "./components/LinksModule";
+import { MensajesModule } from "./components/MensajesModule";
 import { UpContaMascot } from "./components/UpContaMascot";
 import { CommercialLockScreen } from "./components/CommercialLockScreen";
 
@@ -123,13 +127,13 @@ export default function App() {
     setCodeErrorMsg("");
   };
 
-  // Main Tab State: "plan", "explorador", "simulador", "firmas", "cuentas", "ventas", "contador", "dashboard", "rally"
-  const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard" | "rally">("plan");
+  // Main Tab State: "plan", "explorador", "simulador", "firmas", "cuentas", "ventas", "contador", "dashboard", "rally", "links", "mensajes"
+  const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard" | "rally" | "links" | "mensajes">("plan");
 
   // Keep active tab safe based on accessProfile
   useEffect(() => {
     if (accessProfile === "170622") {
-      const allowed = ["plan", "cuentas", "explorador", "dashboard", "simulador", "contador", "ventas"];
+      const allowed = ["plan", "cuentas", "explorador", "dashboard", "simulador", "contador", "ventas", "links", "mensajes"];
       if (!allowed.includes(activeTab)) {
         setActiveTab("plan");
       }
@@ -2737,33 +2741,73 @@ export default function App() {
             
             {/* Logo & Platform Name */}
             <div className="flex items-center gap-3 shrink-0">
-              <DynamicBrandLogo activeTab={activeTab} size="lg" className="shrink-0" />
+              <DynamicBrandLogo activeTab={activeTab} accessProfile={accessProfile} size="lg" className="shrink-0" />
               <div className="hidden sm:block h-8 w-[1px] bg-slate-200"></div>
               <div className="hidden sm:block">
                 <div className="flex items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-full animate-pulse ${
-                    activeTab === "firmas" ? "bg-amber-500" : "bg-orange-500"
+                    accessProfile === "123456" || activeTab === "firmas" ? "bg-amber-500" : "bg-orange-500"
                   }`}></span>
                   <span className="uppercase tracking-widest text-[9.5px] font-black text-[#0B2545]">
-                    {activeTab === "firmas"
-                      ? "Firmas Electrónicas.ec by: anf"
-                      : activeTab === "cuentas"
-                      ? "Cuentas Bancarias Oficiales ANF & UpConta"
-                      : activeTab === "simulador"
-                      ? "Cotizador Empresarial UpConta & ANF"
-                      : activeTab === "contador"
-                      ? "Calculadora Plan Contador UpConta"
-                      : activeTab === "ventas"
-                      ? "Ventas UpConta & ANF AC"
-                      : activeTab === "dashboard"
-                      ? "Dashboard Métrica de Ventas"
-                      : activeTab === "rally"
-                      ? "Rally Dakar de Ventas UpConta & ANF"
-                      : "Plataforma Empresarial UpConta"}
+                    {accessProfile === "123456"
+                      ? (activeTab === "firmas"
+                          ? "Firmas Electrónicas.ec by: anf"
+                          : activeTab === "cuentas"
+                          ? "Cuenta Bancaria Oficial ANFAC Ecuador"
+                          : activeTab === "dashboard"
+                          ? "Dashboard Métricas Firmas ANF"
+                          : activeTab === "ventas"
+                          ? "Ventas Firmas Electrónicas (ANF AC)"
+                          : "Firmas Electrónicas ANFAC")
+                      : accessProfile === "170622"
+                      ? (activeTab === "cuentas"
+                          ? "Cuenta Bancaria Oficial UpConta S.A.S."
+                          : activeTab === "dashboard"
+                          ? "Dashboard Comercial UpConta"
+                          : activeTab === "ventas"
+                          ? "Registro de Ventas UpConta S.A.S."
+                          : activeTab === "simulador"
+                          ? "Cotizador Empresarial UpConta"
+                          : activeTab === "contador"
+                          ? "Calculadora Plan Contador UpConta"
+                          : activeTab === "links"
+                          ? "Tutoriales & Enlaces UpConta"
+                          : activeTab === "mensajes"
+                          ? "Respuestas Rápidas Comerciales"
+                          : "Plataforma Empresarial UpConta")
+                      : (activeTab === "firmas"
+                          ? "Firmas Electrónicas.ec by: anf"
+                          : activeTab === "cuentas"
+                          ? "Cuentas Bancarias Oficiales ANF & UpConta"
+                          : activeTab === "simulador"
+                          ? "Cotizador Empresarial UpConta & ANF"
+                          : activeTab === "contador"
+                          ? "Calculadora Plan Contador UpConta"
+                          : activeTab === "ventas"
+                          ? "Ventas UpConta & ANF AC"
+                          : activeTab === "dashboard"
+                          ? "Dashboard Métrica de Ventas"
+                          : activeTab === "rally"
+                          ? "Rally Dakar de Ventas UpConta & ANF"
+                          : activeTab === "links"
+                          ? "Tutoriales & Enlaces UpConta"
+                          : activeTab === "mensajes"
+                          ? "Respuestas Rápidas Comerciales"
+                          : "Plataforma Empresarial UpConta")}
                   </span>
                 </div>
                 <h1 className="text-xs font-bold tracking-tight text-slate-600 mt-0.5">
-                  {activeTab === "firmas"
+                  {accessProfile === "123456"
+                    ? (activeTab === "firmas"
+                        ? "Certificación Digital & Firmas SRI"
+                        : activeTab === "cuentas"
+                        ? "Datos Oficiales para Depósito o Transferencia"
+                        : activeTab === "dashboard"
+                        ? "Métricas Estadísticas & Comisiones Firmas"
+                        : activeTab === "ventas"
+                        ? "Registro Oficial de Ventas Firmas"
+                        : "Certificación Digital & Firmas SRI")
+                    : activeTab === "firmas"
                     ? "Certificación Digital & Firmas SRI"
                     : activeTab === "cuentas"
                     ? "Datos Oficiales para Depósito o Transferencia"
@@ -2777,6 +2821,10 @@ export default function App() {
                     ? "Métricas Estadísticas & Comisiones"
                     : activeTab === "rally"
                     ? "Ruta de Carrera & Metas de Vendedores"
+                    : activeTab === "links"
+                    ? "Biblioteca Oficial de Videos de Soporte y Capacitación"
+                    : activeTab === "mensajes"
+                    ? "Plantillas y Respuestas Rápidas para Clientes"
                     : "Fichas Técnicas & Cotizador"}
                 </h1>
               </div>
@@ -2978,6 +3026,30 @@ export default function App() {
                   >
                     <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
                     <span>Ventas</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("links")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "links"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <Youtube className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Links</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("mensajes")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "mensajes"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Mensajes</span>
                   </button>
                 </div>
               </>
@@ -3189,6 +3261,30 @@ export default function App() {
                   >
                     <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
                     <span>Ventas</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("links")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "links"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <Youtube className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Links</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("mensajes")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "mensajes"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Mensajes</span>
                   </button>
                 </div>
               </>
@@ -5651,6 +5747,12 @@ export default function App() {
         {/* ==================================== TABS: REGISTRO DE VENTAS ==================================== */}
         {activeTab === "ventas" && <VentasModule companyMode={companyMode} accessProfile={accessProfile} />}
 
+        {/* ==================================== TABS: LINKS & VIDEOS DE SOPORTE ==================================== */}
+        {activeTab === "links" && <LinksModule />}
+
+        {/* ==================================== TABS: MENSAJES RÁPIDOS ==================================== */}
+        {activeTab === "mensajes" && <MensajesModule />}
+
         {/* ==================================== TABS: DASHBOARD METRICAS ==================================== */}
         {activeTab === "dashboard" && <DashboardModule companyMode={companyMode} />}
 
@@ -5693,10 +5795,14 @@ export default function App() {
       {/* Footer Branding section */}
       <footer className="max-w-7xl mx-auto px-6 mt-20 pt-8 border-t border-slate-900 text-center text-slate-500 text-xs">
         <p className="font-light leading-relaxed">
-          UpConta & Firmas Electrónicas.ec by: anf © 2026. Todos los derechos reservados.
+          {accessProfile === "123456"
+            ? "Firmas Electrónicas.ec by: anf © 2026. Todos los derechos reservados."
+            : accessProfile === "170622"
+            ? "UpConta S.A.S. © 2026. Todos los derechos reservados."
+            : "UpConta & Firmas Electrónicas.ec by: anf © 2026. Todos los derechos reservados."}
         </p>
         <p className="text-[10px] text-slate-600 mt-1">
-          Las tarifas mostradas incluyen el 15% de IVA aplicable para Ecuador. Los descuentos anuales corresponden al 10% del plan base.
+          Las tarifas mostradas incluyen el 15% de IVA aplicable para Ecuador.
         </p>
       </footer>
 
