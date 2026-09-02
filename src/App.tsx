@@ -142,6 +142,10 @@ export default function App() {
       if (!allowed.includes(activeTab)) {
         setActiveTab("firmas");
       }
+    } else if (accessProfile === "0000") {
+      if (activeTab !== "dashboard") {
+        setActiveTab("dashboard");
+      }
     }
   }, [accessProfile, activeTab]);
 
@@ -2775,7 +2779,9 @@ export default function App() {
                           : activeTab === "mensajes"
                           ? "Respuestas Rápidas Comerciales"
                           : "Plataforma Empresarial UpConta")
-                      : (activeTab === "firmas"
+                      : (activeTab === "dashboard"
+                          ? "Dashboard General Consolidado (UpConta & ANF)"
+                          : activeTab === "firmas"
                           ? "Firmas Electrónicas.ec by: anf"
                           : activeTab === "cuentas"
                           ? "Cuentas Bancarias Oficiales ANF & UpConta"
@@ -2785,15 +2791,13 @@ export default function App() {
                           ? "Calculadora Plan Contador UpConta"
                           : activeTab === "ventas"
                           ? "Ventas UpConta & ANF AC"
-                          : activeTab === "dashboard"
-                          ? "Dashboard Métrica de Ventas"
                           : activeTab === "rally"
                           ? "Rally Dakar de Ventas UpConta & ANF"
                           : activeTab === "links"
                           ? "Tutoriales & Enlaces UpConta"
                           : activeTab === "mensajes"
                           ? "Respuestas Rápidas Comerciales"
-                          : "Plataforma Empresarial UpConta")}
+                          : "Dashboard General Consolidado UpConta & ANF")}
                   </span>
                 </div>
                 <h1 className="text-xs font-bold tracking-tight text-slate-600 mt-0.5">
@@ -3127,167 +3131,27 @@ export default function App() {
               </>
             )}
 
-            {/* PROFILE 3: 0000 (SUPER ADMIN / ACCESO TOTAL) */}
+            {/* PROFILE 3: 0000 (SUPER ADMIN / ACCESO TOTAL - SOLO DASHBOARD CONSOLIDADO) */}
             {accessProfile === "0000" && (
-              <>
-                {/* GROUP 1: INFO */}
-                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
-                  <div className="px-2 py-1 bg-blue-500/10 text-blue-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-blue-200/50 flex items-center gap-1 shrink-0 select-none">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                    <span>INFO</span>
+              <div className="flex items-center justify-center gap-2 shrink-0 mx-auto px-2">
+                <div className="flex items-center bg-slate-100 p-1.5 rounded-2xl border border-orange-200/80 shadow-xs gap-2">
+                  <div className="px-3 py-1.5 bg-orange-500/15 text-orange-950 text-xs font-black uppercase tracking-wider rounded-xl border border-orange-300 flex items-center gap-1.5 shrink-0 select-none">
+                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                    <span>Acceso Total Consolidado</span>
                   </div>
 
-                  <button
-                    onClick={() => setActiveTab("plan")}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                      activeTab === "plan"
-                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <FileText className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Plan</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("firmas")}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                      activeTab === "firmas"
-                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <FileCheck className="w-3.5 h-3.5 text-orange-400" />
-                    <span>Firmas</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("cuentas")}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                      activeTab === "cuentas"
-                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <Landmark className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Cuentas</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("explorador")}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                      activeTab === "explorador"
-                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <Sliders className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Explorador</span>
-                  </button>
-                </div>
-
-                {/* DASHBOARD & RALLY BUTTONS */}
-                <div className="flex items-center justify-center gap-2 shrink-0 mx-auto px-2">
                   <button
                     onClick={() => setActiveTab("dashboard")}
-                    className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
-                      activeTab === "dashboard"
-                        ? "bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white border-amber-300 ring-2 ring-orange-400/50 scale-[1.03]"
-                        : "bg-gradient-to-r from-[#0B2545] via-[#103460] to-[#0B2545] text-amber-300 hover:text-white border-orange-500/70 hover:border-orange-400 hover:scale-[1.02]"
-                    }`}
+                    className="px-5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2.5 cursor-default bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white border-2 border-amber-300 ring-2 ring-orange-400/50 shadow-md scale-[1.02]"
                   >
-                    <BarChart3 className="w-4 h-4 text-orange-400 fill-orange-400" />
-                    <span className="uppercase tracking-wider font-black">Dashboard</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("rally")}
-                    className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
-                      activeTab === "rally"
-                        ? "bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white border-red-300 ring-2 ring-red-400/60 scale-[1.03]"
-                        : "bg-white text-red-600 hover:text-red-700 border-red-500 hover:border-red-600 hover:bg-red-50/80 hover:scale-[1.02]"
-                    }`}
-                  >
-                    <Flame className={`w-4 h-4 ${activeTab === "rally" ? "text-amber-300 fill-amber-300" : "text-red-600 fill-red-600 animate-pulse"}`} />
-                    <span className={`uppercase tracking-wider font-black ${activeTab === "rally" ? "text-white" : "text-red-600"}`}>
-                      Rally
-                    </span>
-                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black uppercase tracking-wider ${
-                      activeTab === "rally" ? "bg-amber-400 text-slate-950" : "bg-red-100 text-red-700 border border-red-200"
-                    }`}>
-                      Dakar
+                    <BarChart3 className="w-4 h-4 text-amber-200 fill-amber-200" />
+                    <span className="uppercase tracking-wider font-black">Dashboard General (UpConta & ANF)</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider bg-white/20 text-white">
+                      En Vivo
                     </span>
                   </button>
                 </div>
-
-                {/* GROUP 2: COMERCIAL */}
-                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
-                  <div className="px-2 py-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-200/50 flex items-center gap-1 shrink-0 select-none">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>COMERCIAL</span>
-                  </div>
-
-                  <button
-                    onClick={() => setActiveTab("simulador")}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                      activeTab === "simulador"
-                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <Calculator className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Simulador</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("contador")}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                      activeTab === "contador"
-                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <Briefcase className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Contador</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("ventas")}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                      activeTab === "ventas"
-                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Ventas</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("links")}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                      activeTab === "links"
-                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <Youtube className="w-3.5 h-3.5 text-rose-500" />
-                    <span>Links</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("mensajes")}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                      activeTab === "mensajes"
-                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Mensajes</span>
-                  </button>
-                </div>
-              </>
+              </div>
             )}
 
           </div>
