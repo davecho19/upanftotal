@@ -226,7 +226,11 @@ const getCurrentMonthString = (): string => {
   return `${months[now.getMonth()]} ${now.getFullYear()}`;
 };
 
-export function RallyModule() {
+export interface RallyModuleProps {
+  companyMode?: "all" | "upconta" | "firmas" | "locked";
+}
+
+export function RallyModule({ companyMode = "all" }: RallyModuleProps = {}) {
   const currentMonthStr = getCurrentMonthString();
   const [sales, setSales] = useState<SaleTransaction[]>(INITIAL_OFFLINE_SALES);
   const [isLoading, setIsLoading] = useState<boolean>(false);

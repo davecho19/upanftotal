@@ -223,19 +223,27 @@ export function CoBrandLogo({
  */
 export function DynamicBrandLogo({
   activeTab,
+  accessProfile,
   size = "lg",
   className = "",
   lightMode = false,
 }: {
-  activeTab: "plan" | "explorador" | "simulador" | "firmas" | "ventas" | "contador";
+  activeTab?: string;
+  accessProfile?: "170622" | "123456" | "0000" | null;
   size?: "sm" | "md" | "lg" | "xl" | "2xl";
   className?: string;
   lightMode?: boolean;
 }) {
+  if (accessProfile === "170622") {
+    return <UpContaLogo size={size} className={className} lightMode={lightMode} />;
+  }
+  if (accessProfile === "123456") {
+    return <AnfLogo size={size} className={className} lightMode={lightMode} />;
+  }
   if (activeTab === "firmas") {
     return <AnfLogo size={size} className={className} lightMode={lightMode} />;
   }
-  if (activeTab === "simulador" || activeTab === "ventas" || activeTab === "contador") {
+  if (activeTab === "simulador" || activeTab === "ventas" || activeTab === "contador" || activeTab === "cuentas" || activeTab === "rally") {
     return <CoBrandLogo size={size} className={className} lightMode={lightMode} />;
   }
   // "plan" and "explorador"

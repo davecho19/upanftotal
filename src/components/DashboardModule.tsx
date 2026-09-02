@@ -292,7 +292,19 @@ const getSpanishMonthLabel = (mStr: string): string => {
   return year ? `${spanishName} ${year}` : spanishName;
 };
 
-export function DashboardModule() {
+export interface DashboardModuleProps {
+  companyMode?: "all" | "upconta" | "firmas" | "locked";
+}
+
+const normalizeText = (str: string): string => {
+  return (str || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+};
+
+export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   const currentMonthString = getCurrentMonthString();
   const defaultRange = getMonthDateRange(currentMonthString);
 
@@ -306,10 +318,29 @@ export function DashboardModule() {
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthString);
   const [selectedWeek, setSelectedWeek] = useState<string>("all");
   const [selectedAdviser, setSelectedAdviser] = useState<string>("all");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all"); // "all" | "upconta" | "firmas"
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    companyMode === "upconta" ? "upconta" : companyMode === "firmas" ? "firmas" : "all"
+  );
   const [startDate, setStartDate] = useState<string>(defaultRange.start);
   const [endDate, setEndDate] = useState<string>(defaultRange.end);
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  // Sync category filter if companyMode changes
+  useEffect(() => {
+    if (companyMode === "upconta") {
+      setSelectedCategory("upconta");
+      setSelectedAdviser("all");
+      setCompCategory("upconta");
+    } else if (companyMode === "firmas") {
+      setSelectedCategory("firmas");
+      setSelectedAdviser("all");
+      setCompCategory("firmas");
+    } else {
+      setSelectedCategory("all");
+      setSelectedAdviser("all");
+      setCompCategory("all");
+    }
+  }, [companyMode]);
 
   // Keep date range synced when selectedMonth changes
   useEffect(() => {
@@ -495,21 +526,47 @@ export function DashboardModule() {
     return prod.includes("plan") || prod.includes("facturaci") || prod.includes("erp") || prod.includes("contador") || prod.includes("upconta") || plan.includes("erp") || plan.includes("contador");
   };
 
-  // Available unique advisers and months
+  // Base sales filtered by company mode:
+  // - "upconta" (170622): only Karla Haro & David Santander, and only UpConta products
+  // - "firmas" (123456): only Salomé Estrella, Ismenia Escalona, Evelyn Narváez, and only Firmas products
+  // - "all" (0000) / "locked": all records
+  const baseSales = useMemo(() => {
+    if (companyMode === "upconta") {
+      return sales.filter((item) => {
+        const advNorm = normalizeText(item.asesor);
+        const isAllowedAdv = advNorm.includes("karla") || advNorm.includes("david");
+        const isUp = isUpContaSale(item);
+        return isAllowedAdv && isUp;
+      });
+    }
+    if (companyMode === "firmas") {
+      return sales.filter((item) => {
+        const advNorm = normalizeText(item.asesor);
+        const isAllowedAdv = advNorm.includes("salome") || advNorm.includes("ismen") || advNorm.includes("evelyn");
+        const isFir = !isUpContaSale(item);
+        return isAllowedAdv && isFir;
+      });
+    }
+    return sales;
+  }, [sales, companyMode]);
+
+  // Available unique advisers and months based on company baseSales
   const allAdvisers = useMemo(() => {
     const set = new Set<string>();
-    sales.forEach(s => { if (s.asesor) set.add(s.asesor); });
+    baseSales.forEach(s => { if (s.asesor) set.add(s.asesor); });
     if (set.size === 0) {
+      if (companyMode === "upconta") return ["Karla Haro", "David Santander"];
+      if (companyMode === "firmas") return ["Salomé Estrella", "Ismenia Escalona", "Evelyn Narváez"];
       return ["Karla Haro", "Ismenia Escalona", "Salomé Estrella", "Evelyn Narváez", "David Santander"];
     }
     return Array.from(set);
-  }, [sales]);
+  }, [baseSales, companyMode]);
 
   const allMonths = useMemo(() => {
     const set = new Set<string>();
-    sales.forEach(s => { if (s.mes) set.add(s.mes); });
+    baseSales.forEach(s => { if (s.mes) set.add(s.mes); });
     return Array.from(set).sort();
-  }, [sales]);
+  }, [baseSales]);
 
   const allAvailableMonthsOptions = useMemo(() => {
     const monthsOrder = [
@@ -608,7 +665,7 @@ export function DashboardModule() {
 
   // 1. Sales dataset strictly for CHARTS and REPORTE COMISIONES (Only affected by MES filter)
   const salesForChartsAndCommissions = useMemo(() => {
-    return sales.filter(item => {
+    return baseSales.filter(item => {
       // Adviser filter
       if (selectedAdviser !== "all" && item.asesor.toLowerCase() !== selectedAdviser.toLowerCase()) {
         return false;
@@ -640,7 +697,7 @@ export function DashboardModule() {
 
       return true;
     });
-  }, [sales, selectedMonth, selectedAdviser, selectedCategory, searchQuery]);
+  }, [baseSales, selectedMonth, selectedAdviser, selectedCategory, searchQuery]);
 
   // 2. Main Filtered Sales Logic for Scorecards, Detailed Table & Product Table
   const filteredSales = useMemo(() => {
@@ -843,8 +900,8 @@ export function DashboardModule() {
         return true;
       };
 
-      salesA = sales.filter(s => filterFn(s, compMonthA));
-      salesB = sales.filter(s => filterFn(s, compMonthB));
+      salesA = baseSales.filter(s => filterFn(s, compMonthA));
+      salesB = baseSales.filter(s => filterFn(s, compMonthB));
     } else {
       // Custom Date Range Comparison
       const formatDisplayDate = (dStr: string) => {
@@ -868,8 +925,8 @@ export function DashboardModule() {
         return true;
       };
 
-      salesA = sales.filter(s => filterRange(s, compStartDateA, compEndDateA));
-      salesB = sales.filter(s => filterRange(s, compStartDateB, compEndDateB));
+      salesA = baseSales.filter(s => filterRange(s, compStartDateA, compEndDateA));
+      salesB = baseSales.filter(s => filterRange(s, compStartDateB, compEndDateB));
     }
 
     const getStats = (salesList: SaleTransaction[]) => {
@@ -938,6 +995,30 @@ export function DashboardModule() {
     compStartDateB,
     compEndDateB
   ]);
+
+  // Advisers columns for dynamic report tables based on companyMode
+  const activeReportAdvisers = useMemo(() => {
+    if (companyMode === "upconta") {
+      return [
+        { key: "karlaHaro", name: "Karla Haro" },
+        { key: "davidSantander", name: "David Santander" },
+      ];
+    }
+    if (companyMode === "firmas") {
+      return [
+        { key: "salomeEstrella", name: "Salomé Estrella" },
+        { key: "ismeniaEscalona", name: "Ismenia Escalona" },
+        { key: "evelynNarvaez", name: "Evelyn Narváez" },
+      ];
+    }
+    return [
+      { key: "karlaHaro", name: "Karla Haro" },
+      { key: "ismeniaEscalona", name: "Ismenia Escalona" },
+      { key: "salomeEstrella", name: "Salomé Estrella" },
+      { key: "evelynNarvaez", name: "Evelyn Narváez" },
+      { key: "davidSantander", name: "David Santander" },
+    ];
+  }, [companyMode]);
 
   // Dynamic Table 1: Reporte por Producto Table (Sorted FIRMAS first, UPCONTA second)
   const dynamicReportProduct = useMemo(() => {
@@ -1057,6 +1138,72 @@ export function DashboardModule() {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto pb-12">
+      {/* ================= COMPANY PROFILE BANNER ================= */}
+      {companyMode === "upconta" ? (
+        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-4 sm:p-5 rounded-2xl shadow-md border border-orange-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-orange-500 text-white font-black shadow-sm">
+              <Building2 className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                  Dashboard Comercial UpConta (Planes &amp; ERP)
+                </h2>
+                <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-2xs">
+                  Empresa: UpConta (170622)
+                </span>
+              </div>
+              <p className="text-xs text-orange-200/90 font-medium mt-0.5">
+                Métricas exclusivas de la línea UpConta • Asesores asignados: <strong className="text-white">Karla Haro</strong> y <strong className="text-white">David Santander</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : companyMode === "firmas" ? (
+        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-4 sm:p-5 rounded-2xl shadow-md border border-amber-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-400 text-slate-950 font-black shadow-sm">
+              <FileCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                  Dashboard Comercial ANF AC (Firmas Electrónicas)
+                </h2>
+                <span className="bg-amber-400 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-2xs">
+                  Empresa: ANF AC (123456)
+                </span>
+              </div>
+              <p className="text-xs text-amber-200/90 font-medium mt-0.5">
+                Métricas exclusivas de Firmas Electrónicas • Asesoras asignadas: <strong className="text-white">Salomé Estrella</strong>, <strong className="text-white">Ismenia Escalona</strong> y <strong className="text-white">Evelyn Narváez</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-4 sm:p-5 rounded-2xl shadow-md border border-blue-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-blue-500 text-white font-black shadow-sm">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                  Dashboard Ejecutivo Consolidado (UpConta &amp; ANF AC)
+                </h2>
+                <span className="bg-blue-400 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-2xs">
+                  Vista Total / Super Admin (0000)
+                </span>
+              </div>
+              <p className="text-xs text-blue-200/90 font-medium mt-0.5">
+                Visualización consolidada de todas las empresas, líneas de productos y equipo comercial completo.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ================= TOP SYNC BAR ================= */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm">
         <div className="flex items-center gap-3">
@@ -1207,11 +1354,20 @@ export function DashboardModule() {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+              disabled={companyMode === "upconta" || companyMode === "firmas"}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none disabled:opacity-80"
             >
-              <option value="all">Todas las Líneas (UpConta &amp; Firmas)</option>
-              <option value="upconta">Línea UpConta (Sistemas &amp; ERP)</option>
-              <option value="firmas">Línea Firmas Electrónicas.ec</option>
+              {companyMode === "upconta" ? (
+                <option value="upconta">Solo Línea UpConta (Sistemas &amp; ERP)</option>
+              ) : companyMode === "firmas" ? (
+                <option value="firmas">Solo Línea Firmas Electrónicas.ec</option>
+              ) : (
+                <>
+                  <option value="all">Todas las Líneas (UpConta &amp; Firmas)</option>
+                  <option value="upconta">Línea UpConta (Sistemas &amp; ERP)</option>
+                  <option value="firmas">Línea Firmas Electrónicas.ec</option>
+                </>
+              )}
             </select>
           </div>
 
@@ -1226,7 +1382,13 @@ export function DashboardModule() {
               onChange={(e) => setSelectedAdviser(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none"
             >
-              <option value="all">Todos los Asesores (Equipo Completo)</option>
+              <option value="all">
+                {companyMode === "upconta"
+                  ? "Todos los Asesores UpConta (Karla & David)"
+                  : companyMode === "firmas"
+                  ? "Todas las Asesoras Firmas (Salomé, Ismenia, Evelyn)"
+                  : "Todos los Asesores (Equipo Completo)"}
+              </option>
               {allAdvisers.map((adv) => (
                 <option key={adv} value={adv}>
                   {adv}
@@ -1296,30 +1458,30 @@ export function DashboardModule() {
           </div>
         </div>
 
-        {/* ROW 2: LÍNEA UPCONTA (NARANJA Y AZUL) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Card 4: Total Ventas UpConta */}
-          <div className="bg-gradient-to-br from-[#0B2545] via-[#003566] to-[#0B2545] text-white rounded-2xl p-5 shadow-md border border-blue-500/40 relative overflow-hidden group hover:border-orange-400 transition-all">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1">
-                <span className="text-[11px] font-extrabold text-orange-400 uppercase tracking-wider flex items-center gap-1">
-                  <Building2 className="w-3.5 h-3.5 text-orange-400" />
-                  Total Ventas UpConta
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                  {formatCurrency(totalVentasUpConta)}
+        {/* ROW 2: LÍNEA UPCONTA (NARANJA Y AZUL) - Shown for UpConta and All modes */}
+        {(companyMode === "upconta" || companyMode === "all" || companyMode === "locked") && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Card 4: Total Ventas UpConta */}
+            <div className="bg-gradient-to-br from-[#0B2545] via-[#003566] to-[#0B2545] text-white rounded-2xl p-5 shadow-md border border-blue-500/40 relative overflow-hidden group hover:border-orange-400 transition-all">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-extrabold text-orange-400 uppercase tracking-wider flex items-center gap-1">
+                    <Building2 className="w-3.5 h-3.5 text-orange-400" />
+                    Total Ventas UpConta
+                  </span>
+                  <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                    {formatCurrency(totalVentasUpConta)}
+                  </div>
+                </div>
+                <div className="p-2.5 bg-orange-500/20 border border-orange-400/30 rounded-xl text-orange-400">
+                  <Building2 className="w-5 h-5" />
                 </div>
               </div>
-              <div className="p-2.5 bg-orange-500/20 border border-orange-400/30 rounded-xl text-orange-400">
-                <Building2 className="w-5 h-5" />
-              </div>
             </div>
-          </div>
 
-          {/* Card 5: Cantidad Ventas UpConta */}
-          <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-orange-200 relative overflow-hidden group hover:border-orange-400 transition-all">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1">
+            {/* Card 5: Cantidad Ventas UpConta */}
+            <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-orange-200 relative overflow-hidden group hover:border-orange-400 transition-all">
+              <div className="flex justify-between items-start">
                 <span className="text-[11px] font-extrabold text-orange-600 uppercase tracking-wider flex items-center gap-1">
                   <Layers className="w-3.5 h-3.5 text-orange-500" />
                   Cantidad Ventas UpConta
@@ -1332,12 +1494,10 @@ export function DashboardModule() {
                 <Building2 className="w-5 h-5" />
               </div>
             </div>
-          </div>
 
-          {/* Card 6: Ticket Promedio UpConta */}
-          <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-blue-200 relative overflow-hidden group hover:border-blue-400 transition-all">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1">
+            {/* Card 6: Ticket Promedio UpConta */}
+            <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-blue-200 relative overflow-hidden group hover:border-blue-400 transition-all">
+              <div className="flex justify-between items-start">
                 <span className="text-[11px] font-extrabold text-blue-800 uppercase tracking-wider flex items-center gap-1">
                   <Calculator className="w-3.5 h-3.5 text-blue-600" />
                   Ticket Prom. UpConta
@@ -1351,32 +1511,32 @@ export function DashboardModule() {
               </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* ROW 3: LÍNEA FIRMAS ELECTRÓNICAS.EC (AZUL Y AMARILLO) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Card 7: Total Ventas Firmas */}
-          <div className="bg-gradient-to-br from-[#003366] via-[#002244] to-[#003366] text-white rounded-2xl p-5 shadow-md border border-amber-400/40 relative overflow-hidden group hover:border-amber-300 transition-all">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1">
-                <span className="text-[11px] font-extrabold text-amber-300 uppercase tracking-wider flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
-                  Total Ventas Firmas
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-amber-100 tracking-tight">
-                  {formatCurrency(totalVentasFirmas)}
+        {/* ROW 3: LÍNEA FIRMAS ELECTRÓNICAS.EC (AZUL Y AMARILLO) - Shown for Firmas and All modes */}
+        {(companyMode === "firmas" || companyMode === "all" || companyMode === "locked") && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Card 7: Total Ventas Firmas */}
+            <div className="bg-gradient-to-br from-[#003366] via-[#002244] to-[#003366] text-white rounded-2xl p-5 shadow-md border border-amber-400/40 relative overflow-hidden group hover:border-amber-300 transition-all">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-extrabold text-amber-300 uppercase tracking-wider flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+                    Total Ventas Firmas
+                  </span>
+                  <div className="text-2xl sm:text-3xl font-black text-amber-100 tracking-tight">
+                    {formatCurrency(totalVentasFirmas)}
+                  </div>
+                </div>
+                <div className="p-2.5 bg-amber-400/20 border border-amber-300/30 rounded-xl text-amber-300">
+                  <FileCheck className="w-5 h-5" />
                 </div>
               </div>
-              <div className="p-2.5 bg-amber-400/20 border border-amber-300/30 rounded-xl text-amber-300">
-                <FileCheck className="w-5 h-5" />
-              </div>
             </div>
-          </div>
 
-          {/* Card 8: Cantidad Ventas Firmas */}
-          <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-amber-200 relative overflow-hidden group hover:border-amber-400 transition-all">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1">
+            {/* Card 8: Cantidad Ventas Firmas */}
+            <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-amber-200 relative overflow-hidden group hover:border-amber-400 transition-all">
+              <div className="flex justify-between items-start">
                 <span className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1">
                   <Layers className="w-3.5 h-3.5 text-amber-600" />
                   Cantidad Ventas Firmas
@@ -1389,17 +1549,15 @@ export function DashboardModule() {
                 <ShieldCheck className="w-5 h-5" />
               </div>
             </div>
-          </div>
 
-          {/* Card 9: Ticket Promedio Firmas */}
-          <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-amber-200 relative overflow-hidden group hover:border-amber-400 transition-all">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1">
+            {/* Card 9: Ticket Promedio Firmas */}
+            <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-slate-200 relative overflow-hidden group hover:border-amber-400 transition-all">
+              <div className="flex justify-between items-start">
                 <span className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1">
                   <Calculator className="w-3.5 h-3.5 text-amber-600" />
                   Ticket Prom. Firmas
                 </span>
-                <div className="text-2xl font-black text-amber-950 tracking-tight">
+                <div className="text-2xl font-black text-slate-900 tracking-tight">
                   {formatCurrency(ticketPromedioFirmas)}
                 </div>
               </div>
@@ -1408,7 +1566,7 @@ export function DashboardModule() {
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ================= SUB-NAVIGATION TABS FOR DASHBOARD VIEWS ================= */}
@@ -1565,78 +1723,101 @@ export function DashboardModule() {
               <h3 className="text-lg font-black text-slate-900">Análisis Semanal de Cantidades (# Ventas y # Productos)</h3>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className={`grid grid-cols-1 ${companyMode === 'all' || companyMode === 'locked' ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
               {/* Chart A: Semanal General */}
               <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
                 <div className="border-b border-slate-100 pb-2">
                   <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                     <BarChart3 className="w-4 h-4 text-slate-700" />
-                    1. Cantidad Semanal - General
+                    1. Cantidad Semanal - {companyMode === "upconta" ? "UpConta" : companyMode === "firmas" ? "Firmas.ec" : "General"}
                   </h4>
-                  <p className="text-[11px] text-slate-500">UpConta &amp; Firmas combinados</p>
+                  <p className="text-[11px] text-slate-500">
+                    {companyMode === "upconta"
+                      ? "Ventas y productos de sistemas"
+                      : companyMode === "firmas"
+                      ? "Firmas electrónicas emitidas"
+                      : "UpConta & Firmas combinados"}
+                  </p>
                 </div>
                 <div className="h-56 w-full pt-2">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weeklyDataGeneral} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
+                    <BarChart
+                      data={companyMode === "upconta" ? weeklyDataUpConta : companyMode === "firmas" ? weeklyDataFirmas : weeklyDataGeneral}
+                      margin={{ top: 10, right: 10, left: -20, bottom: 10 }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="semana" tick={{ fontSize: 10, fontWeight: "bold" }} />
                       <YAxis tick={{ fontSize: 10 }} />
                       <Tooltip />
                       <Legend wrapperStyle={{ fontSize: "10px", fontWeight: "bold" }} />
-                      <Bar dataKey="cantidadVentas" name="Ventas (#)" fill="#0B2545" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="cantidadProductos" name="Productos (#)" fill="#F97316" radius={[4, 4, 0, 0]} />
+                      <Bar
+                        dataKey="cantidadVentas"
+                        name={companyMode === "firmas" ? "Firmas Emitidas" : "Ventas (#)"}
+                        fill={companyMode === "firmas" ? "#EAB308" : "#0B2545"}
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="cantidadProductos"
+                        name="Productos (#)"
+                        fill={companyMode === "upconta" ? "#3B82F6" : companyMode === "firmas" ? "#003366" : "#F97316"}
+                        radius={[4, 4, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
               {/* Chart B: Semanal UpConta */}
-              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
-                <div className="border-b border-slate-100 pb-2">
-                  <h4 className="text-xs font-black text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4 text-orange-500" />
-                    2. Cantidad Semanal - UpConta
-                  </h4>
-                  <p className="text-[11px] text-slate-500">Sistemas &amp; Planes ERP</p>
+              {(companyMode === "upconta" || companyMode === "all" || companyMode === "locked") && (
+                <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
+                  <div className="border-b border-slate-100 pb-2">
+                    <h4 className="text-xs font-black text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 text-orange-500" />
+                      2. Cantidad Semanal - UpConta
+                    </h4>
+                    <p className="text-[11px] text-slate-500">Sistemas &amp; Planes ERP</p>
+                  </div>
+                  <div className="h-56 w-full pt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={weeklyDataUpConta} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="semana" tick={{ fontSize: 10, fontWeight: "bold" }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip />
+                        <Legend wrapperStyle={{ fontSize: "10px", fontWeight: "bold" }} />
+                        <Bar dataKey="cantidadVentas" name="Ventas UpConta" fill="#0B2545" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="cantidadProductos" name="Productos" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div className="h-56 w-full pt-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weeklyDataUpConta} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="semana" tick={{ fontSize: 10, fontWeight: "bold" }} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: "10px", fontWeight: "bold" }} />
-                      <Bar dataKey="cantidadVentas" name="Ventas UpConta" fill="#0B2545" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="cantidadProductos" name="Productos" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+              )}
 
               {/* Chart C: Semanal Firmas */}
-              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
-                <div className="border-b border-slate-100 pb-2">
-                  <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-amber-500" />
-                    3. Cantidad Semanal - Firmas.ec
-                  </h4>
-                  <p className="text-[11px] text-slate-500">Certificados SRI e Imprenta</p>
+              {(companyMode === "firmas" || companyMode === "all" || companyMode === "locked") && (
+                <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
+                  <div className="border-b border-slate-100 pb-2">
+                    <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-amber-500" />
+                      3. Cantidad Semanal - Firmas.ec
+                    </h4>
+                    <p className="text-[11px] text-slate-500">Certificados SRI e Imprenta</p>
+                  </div>
+                  <div className="h-56 w-full pt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={weeklyDataFirmas} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="semana" tick={{ fontSize: 10, fontWeight: "bold" }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip />
+                        <Legend wrapperStyle={{ fontSize: "10px", fontWeight: "bold" }} />
+                        <Bar dataKey="cantidadVentas" name="Firmas Emitidas" fill="#EAB308" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="cantidadProductos" name="Productos" fill="#003366" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div className="h-56 w-full pt-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weeklyDataFirmas} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="semana" tick={{ fontSize: 10, fontWeight: "bold" }} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: "10px", fontWeight: "bold" }} />
-                      <Bar dataKey="cantidadVentas" name="Firmas Emitidas" fill="#EAB308" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="cantidadProductos" name="Productos" fill="#003366" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -1923,11 +2104,9 @@ export function DashboardModule() {
                 <tr>
                   <th className="p-3">Línea</th>
                   <th className="p-3">Producto / Plan</th>
-                  <th className="p-3 text-right">Karla Haro</th>
-                  <th className="p-3 text-right">Ismenia Escalona</th>
-                  <th className="p-3 text-right">Salomé Estrella</th>
-                  <th className="p-3 text-right">Evelyn Narváez</th>
-                  <th className="p-3 text-right">David Santander</th>
+                  {activeReportAdvisers.map(adv => (
+                    <th key={adv.key} className="p-3 text-right">{adv.name}</th>
+                  ))}
                   <th className="p-3 text-right bg-orange-600">TOTAL</th>
                 </tr>
               </thead>
@@ -1943,17 +2122,17 @@ export function DashboardModule() {
                         </span>
                       </td>
                       <td className="p-3 font-extrabold text-slate-900">{row.producto}</td>
-                      <td className="p-3 text-right">{formatCurrency(row.karlaHaro)}</td>
-                      <td className="p-3 text-right">{formatCurrency(row.ismeniaEscalona)}</td>
-                      <td className="p-3 text-right">{formatCurrency(row.salomeEstrella)}</td>
-                      <td className="p-3 text-right">{formatCurrency(row.evelynNarvaez)}</td>
-                      <td className="p-3 text-right">{formatCurrency(row.davidSantander)}</td>
+                      {activeReportAdvisers.map(adv => (
+                        <td key={adv.key} className="p-3 text-right">
+                          {formatCurrency(((row as any)[adv.key] || 0))}
+                        </td>
+                      ))}
                       <td className="p-3 text-right font-black text-slate-900 bg-orange-50">{formatCurrency(row.total)}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-500 font-bold">
+                    <td colSpan={3 + activeReportAdvisers.length} className="p-8 text-center text-slate-500 font-bold">
                       No hay registros de productos para los filtros seleccionados.
                     </td>
                   </tr>
@@ -1962,11 +2141,11 @@ export function DashboardModule() {
               <tfoot className="bg-slate-900 text-white font-black text-xs">
                 <tr>
                   <td colSpan={2} className="p-3 text-right uppercase tracking-wider">TOTAL GENERAL FILTRADO</td>
-                  <td className="p-3 text-right text-amber-300">{formatCurrency(dynamicReportProduct.reduce((a, b) => a + b.karlaHaro, 0))}</td>
-                  <td className="p-3 text-right text-amber-300">{formatCurrency(dynamicReportProduct.reduce((a, b) => a + b.ismeniaEscalona, 0))}</td>
-                  <td className="p-3 text-right text-amber-300">{formatCurrency(dynamicReportProduct.reduce((a, b) => a + b.salomeEstrella, 0))}</td>
-                  <td className="p-3 text-right text-amber-300">{formatCurrency(dynamicReportProduct.reduce((a, b) => a + b.evelynNarvaez, 0))}</td>
-                  <td className="p-3 text-right text-amber-300">{formatCurrency(dynamicReportProduct.reduce((a, b) => a + b.davidSantander, 0))}</td>
+                  {activeReportAdvisers.map(adv => (
+                    <td key={adv.key} className="p-3 text-right text-amber-300">
+                      {formatCurrency(dynamicReportProduct.reduce((a, b) => a + ((b as any)[adv.key] || 0), 0))}
+                    </td>
+                  ))}
                   <td className="p-3 text-right bg-orange-500 text-white font-black">{formatCurrency(totalVentasMonto)}</td>
                 </tr>
               </tfoot>
@@ -2003,55 +2182,57 @@ export function DashboardModule() {
               <thead className="bg-[#002855] text-white uppercase text-[11px] font-black tracking-wider">
                 <tr>
                   <th className="p-3 border-r border-slate-700">PRODUCTO</th>
-                  <th className="p-3 text-right border-r border-slate-700">Karla Haro</th>
-                  <th className="p-3 text-right border-r border-slate-700">Ismenia Escalona</th>
-                  <th className="p-3 text-right border-r border-slate-700">Salomé Estrella</th>
-                  <th className="p-3 text-right border-r border-slate-700">Evelyn Narváez</th>
-                  <th className="p-3 text-right border-r border-slate-700">David Santander</th>
+                  {activeReportAdvisers.map(adv => (
+                    <th key={adv.key} className="p-3 text-right border-r border-slate-700">{adv.name}</th>
+                  ))}
                   <th className="p-3 text-right bg-[#001D3D] text-amber-300 font-extrabold">TOTAL</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 font-semibold text-slate-800">
-                <tr className="bg-white hover:bg-slate-50">
-                  <td className="p-3 font-extrabold text-slate-900 border-r border-slate-200">
-                    UpConta
-                  </td>
-                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"]?.upconta || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"]?.upconta || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"]?.upconta || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"]?.upconta || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"]?.upconta || 0)}</td>
-                  <td className="p-3 text-right font-black bg-slate-100 text-slate-900">{formatCurrency(dynamicCommissionsReport.totalUpconta)}</td>
-                </tr>
-                <tr className="bg-slate-50/50 hover:bg-slate-100/50">
-                  <td className="p-3 font-extrabold text-slate-900 border-r border-slate-200">
-                    Firmas
-                  </td>
-                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"]?.firmas || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"]?.firmas || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"]?.firmas || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"]?.firmas || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-200">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"]?.firmas || 0)}</td>
-                  <td className="p-3 text-right font-black bg-slate-100 text-slate-900">{formatCurrency(dynamicCommissionsReport.totalFirmas)}</td>
-                </tr>
+                {(companyMode === "upconta" || companyMode === "all") && (
+                  <tr className="bg-white hover:bg-slate-50">
+                    <td className="p-3 font-extrabold text-slate-900 border-r border-slate-200">
+                      UpConta
+                    </td>
+                    {activeReportAdvisers.map(adv => (
+                      <td key={adv.key} className="p-3 text-right border-r border-slate-200">
+                        {formatCurrency(dynamicCommissionsReport.advisers[adv.name]?.upconta || 0)}
+                      </td>
+                    ))}
+                    <td className="p-3 text-right font-black bg-slate-100 text-slate-900">{formatCurrency(dynamicCommissionsReport.totalUpconta)}</td>
+                  </tr>
+                )}
+                {(companyMode === "firmas" || companyMode === "all") && (
+                  <tr className="bg-slate-50/50 hover:bg-slate-100/50">
+                    <td className="p-3 font-extrabold text-slate-900 border-r border-slate-200">
+                      Firmas
+                    </td>
+                    {activeReportAdvisers.map(adv => (
+                      <td key={adv.key} className="p-3 text-right border-r border-slate-200">
+                        {formatCurrency(dynamicCommissionsReport.advisers[adv.name]?.firmas || 0)}
+                      </td>
+                    ))}
+                    <td className="p-3 text-right font-black bg-slate-100 text-slate-900">{formatCurrency(dynamicCommissionsReport.totalFirmas)}</td>
+                  </tr>
+                )}
                 <tr className="bg-slate-100 font-black text-slate-900 border-t-2 border-slate-300">
                   <td className="p-3 uppercase border-r border-slate-300">TOTAL</td>
-                  <td className="p-3 text-right border-r border-slate-300">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"]?.total || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-300">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"]?.total || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-300">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"]?.total || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-300">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"]?.total || 0)}</td>
-                  <td className="p-3 text-right border-r border-slate-300">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"]?.total || 0)}</td>
+                  {activeReportAdvisers.map(adv => (
+                    <td key={adv.key} className="p-3 text-right border-r border-slate-300">
+                      {formatCurrency(dynamicCommissionsReport.advisers[adv.name]?.total || 0)}
+                    </td>
+                  ))}
                   <td className="p-3 text-right bg-slate-200 text-slate-900">{formatCurrency(dynamicCommissionsReport.grandTotalSales)}</td>
                 </tr>
                 <tr className="bg-[#00BCD4]/15 font-black text-cyan-950 text-xs border-t border-cyan-300">
                   <td className="p-3.5 uppercase border-r border-cyan-200 text-cyan-900">
                     COMISION
                   </td>
-                  <td className="p-3.5 text-right border-r border-cyan-200">{formatCurrency(dynamicCommissionsReport.advisers["Karla Haro"]?.comision || 0)}</td>
-                  <td className="p-3.5 text-right border-r border-cyan-200">{formatCurrency(dynamicCommissionsReport.advisers["Ismenia Escalona"]?.comision || 0)}</td>
-                  <td className="p-3.5 text-right border-r border-cyan-200">{formatCurrency(dynamicCommissionsReport.advisers["Salomé Estrella"]?.comision || 0)}</td>
-                  <td className="p-3.5 text-right border-r border-cyan-200">{formatCurrency(dynamicCommissionsReport.advisers["Evelyn Narváez"]?.comision || 0)}</td>
-                  <td className="p-3.5 text-right border-r border-cyan-200">{formatCurrency(dynamicCommissionsReport.advisers["David Santander"]?.comision || 0)}</td>
+                  {activeReportAdvisers.map(adv => (
+                    <td key={adv.key} className="p-3.5 text-right border-r border-cyan-200">
+                      {formatCurrency(dynamicCommissionsReport.advisers[adv.name]?.comision || 0)}
+                    </td>
+                  ))}
                   <td className="p-3.5 text-right bg-[#00ACC1] text-white font-extrabold">{formatCurrency(dynamicCommissionsReport.totalComPool)}</td>
                 </tr>
               </tbody>

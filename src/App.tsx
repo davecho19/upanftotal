@@ -74,36 +74,81 @@ import { ContadorModule } from "./components/ContadorModule";
 import { DashboardModule } from "./components/DashboardModule";
 import { RallyModule } from "./components/RallyModule";
 import { UpContaMascot } from "./components/UpContaMascot";
+import { CommercialLockScreen } from "./components/CommercialLockScreen";
 
 export default function App() {
-  // Access control state: by default only "dashboard" and "ventas" are visible until unlocked with D180890S
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  // Access control state for multi-company division:
+  // - "170622": UpConta (tabs: plan, cuentas [UpConta], explorador, dashboard [Karla Haro, David Santander], simulador, contador, ventas)
+  // - "123456": Firmas ANF (tabs: firmas, cuentas [ANF], dashboard [Salomé, Ismenia, Evelyn], ventas)
+  // - "0000": Super Admin / Acceso Total (all tabs, full dashboard)
+  // - null: Bloqueado (Home Lock Screen)
+  const [accessProfile, setAccessProfile] = useState<"170622" | "123456" | "0000" | null>(null);
   const [accessCodeInput, setAccessCodeInput] = useState<string>("");
+  const [codeErrorMsg, setCodeErrorMsg] = useState<string>("");
+
+  const isUnlocked = accessProfile !== null;
+
+  const handleUnlockWithCode = (code: string): boolean => {
+    const raw = code.trim();
+    if (raw === "170622") {
+      setAccessProfile("170622");
+      setActiveTab("plan");
+      return true;
+    } else if (raw === "123456") {
+      setAccessProfile("123456");
+      setActiveTab("firmas");
+      return true;
+    } else if (raw === "0000" || raw.toUpperCase() === "D180890S") {
+      setAccessProfile("0000");
+      setActiveTab("dashboard");
+      return true;
+    }
+    return false;
+  };
 
   const handleUnlock = () => {
-    if (accessCodeInput.trim().toUpperCase() === "D180890S") {
-      setIsUnlocked(true);
+    const ok = handleUnlockWithCode(accessCodeInput);
+    if (ok) {
       setAccessCodeInput("");
+      setCodeErrorMsg("");
+    } else {
+      setCodeErrorMsg("Código no válido");
+      setTimeout(() => setCodeErrorMsg(""), 3000);
     }
   };
 
   const handleLock = () => {
-    setIsUnlocked(false);
+    setAccessProfile(null);
     setAccessCodeInput("");
-    if (activeTab !== "dashboard" && activeTab !== "ventas") {
-      setActiveTab("dashboard");
-    }
+    setCodeErrorMsg("");
   };
 
   // Main Tab State: "plan", "explorador", "simulador", "firmas", "cuentas", "ventas", "contador", "dashboard", "rally"
-  const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard" | "rally">("dashboard");
+  const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard" | "rally">("plan");
 
-  // Keep active tab safe if locked
+  // Keep active tab safe based on accessProfile
   useEffect(() => {
-    if (!isUnlocked && activeTab !== "dashboard" && activeTab !== "ventas") {
-      setActiveTab("dashboard");
+    if (accessProfile === "170622") {
+      const allowed = ["plan", "cuentas", "explorador", "dashboard", "simulador", "contador", "ventas"];
+      if (!allowed.includes(activeTab)) {
+        setActiveTab("plan");
+      }
+    } else if (accessProfile === "123456") {
+      const allowed = ["firmas", "cuentas", "dashboard", "ventas"];
+      if (!allowed.includes(activeTab)) {
+        setActiveTab("firmas");
+      }
     }
-  }, [isUnlocked, activeTab]);
+  }, [accessProfile, activeTab]);
+
+  const companyMode: "all" | "upconta" | "firmas" | "locked" = 
+    accessProfile === "170622"
+      ? "upconta"
+      : accessProfile === "123456"
+      ? "firmas"
+      : accessProfile === "0000"
+      ? "all"
+      : "locked";
 
   // Category tab state
   const [tipoPlan, setTipoPlan] = useState<"facturacion" | "erp" | "contador">("facturacion");
@@ -2676,6 +2721,10 @@ export default function App() {
     );
   };
 
+  if (accessProfile === null) {
+    return <CommercialLockScreen onUnlock={handleUnlockWithCode} />;
+  }
+
   return (
     <div id="app-root" className="min-h-screen bg-[#f4f6f9] text-slate-800 font-sans selection:bg-[#0B2545]/20 antialiased pb-20">
       
@@ -2733,8 +2782,28 @@ export default function App() {
               </div>
             </div>
 
-            {/* Top Right Controls: Billing toggle + Unlock Input with OK Button */}
-            <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+            {/* Top Right Controls: Billing toggle + Profile Badge + Unlock Input with OK Button */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0 ml-auto">
+              {/* Active Profile Badge (Discrete, no raw codes visible) */}
+              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-black tracking-wide border shadow-2xs">
+                {accessProfile === "170622" ? (
+                  <span className="bg-orange-100 text-orange-800 border border-orange-300 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                    <Building2 className="w-3 h-3 text-orange-600" />
+                    <span>Perfil UpConta</span>
+                  </span>
+                ) : accessProfile === "123456" ? (
+                  <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                    <FileCheck className="w-3 h-3 text-amber-600" />
+                    <span>Perfil Firmas ANF</span>
+                  </span>
+                ) : accessProfile === "0000" ? (
+                  <span className="bg-blue-100 text-[#0B2545] border border-blue-300 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-blue-600" />
+                    <span>Sesión Administrador</span>
+                  </span>
+                ) : null}
+              </div>
+
               {/* Quick billing cycle toggle - only shown when on Plan tab and ERP plan selected */}
               {isUnlocked && activeTab === "plan" && tipoPlan === "erp" && (
                 <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs shrink-0">
@@ -2764,12 +2833,15 @@ export default function App() {
                 </div>
               )}
 
-              {/* Unlock input and OK button */}
-              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs">
+              {/* Unlock / Switch profile input and Lock button */}
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs relative">
                 <input
-                  type="text"
+                  type="password"
                   value={accessCodeInput}
-                  onChange={(e) => setAccessCodeInput(e.target.value)}
+                  onChange={(e) => {
+                    setAccessCodeInput(e.target.value);
+                    if (codeErrorMsg) setCodeErrorMsg("");
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleUnlock();
                   }}
@@ -2779,78 +2851,212 @@ export default function App() {
                 <button
                   onClick={handleUnlock}
                   className="px-3 py-1 bg-[#0B2545] hover:bg-[#003566] text-white text-xs font-black rounded-lg transition-all cursor-pointer shadow-xs uppercase tracking-wider"
-                  title="Desbloquear pestañas"
+                  title="Cambiar perfil"
                 >
                   OK
                 </button>
                 <button
                   onClick={handleLock}
                   className="px-2.5 py-1 bg-slate-700 hover:bg-rose-600 text-white text-xs font-black rounded-lg transition-all cursor-pointer shadow-xs uppercase tracking-wider flex items-center justify-center"
-                  title="Ocultar pestañas (Bloquear)"
+                  title="Cerrar sesión y bloquear"
                 >
                   X
                 </button>
+
+                {codeErrorMsg && (
+                  <div className="absolute top-full right-0 mt-1 bg-rose-600 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg z-50 whitespace-nowrap">
+                    {codeErrorMsg}
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Motivational Sales Ticker Banner - Full Width directly under Plataforma Empresarial UpConta */}
-          <div className="w-full bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white py-2 rounded-xl border border-orange-500/40 overflow-hidden relative shadow-md">
-            <div className="animate-marquee flex items-center whitespace-nowrap">
-              {[
-                "“Las ventas no las cierran los mejores vendedores; las cierran quienes nunca dejan de dar seguimiento.”",
-                "“La disciplina de hoy es la comisión de mañana.”",
-                "“Las metas no se negocian; se trabajan todos los días.”",
-                "“Las ventas no las cierran los mejores vendedores; las cierran quienes nunca dejan de dar seguimiento.”",
-                "“La disciplina de hoy es la comisión de mañana.”",
-                "“Las metas no se negocian; se trabajan todos los días.”"
-              ].map((frase, idx) => (
-                <div key={idx} className="flex items-center gap-4 sm:gap-6 mx-6 shrink-0">
-                  <span className="bg-orange-500 text-white text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-xs flex items-center gap-1.5 shrink-0">
-                    <Flame className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
-                    <span>MOTIVACIÓN</span>
-                  </span>
-                  <span className="text-sm sm:text-base md:text-lg font-black tracking-wide text-white drop-shadow-xs">
-                    {frase}
-                  </span>
-                  <span className="text-amber-400 font-extrabold text-sm sm:text-base">★</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Underneath Logo & Motivation: Tabs Header */}
+          {/* Underneath Logo: Tabs Header Multi-Company (NO TELEPROMPTER) */}
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 sm:gap-3 overflow-x-auto scrollbar-none flex-nowrap w-full">
             
-            {!isUnlocked ? (
-              /* Minimal view when locked: ONLY Dashboard and Ventas */
-              <div className="flex items-center justify-center gap-3 w-full py-1">
-                <button
-                  onClick={() => setActiveTab("dashboard")}
-                  className={`px-4 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
-                    activeTab === "dashboard"
-                      ? "bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white border-amber-300 ring-2 ring-orange-400/50 scale-[1.03]"
-                      : "bg-gradient-to-r from-[#0B2545] via-[#103460] to-[#0B2545] text-amber-300 hover:text-white border-orange-500/70 hover:border-orange-400 hover:scale-[1.02]"
-                  }`}
-                >
-                  <BarChart3 className="w-4 h-4 text-orange-400 fill-orange-400" />
-                  <span className="uppercase tracking-wider font-black">Dashboard</span>
-                </button>
+            {/* PROFILE 1: 170622 (UPCONTA) */}
+            {accessProfile === "170622" && (
+              <>
+                {/* GROUP 1: INFO UPCONTA */}
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-orange-200/80 shadow-2xs gap-1 shrink-0">
+                  <div className="px-2 py-1 bg-orange-500/15 text-orange-800 text-[10px] font-black uppercase tracking-wider rounded-lg border border-orange-300 flex items-center gap-1 shrink-0 select-none">
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                    <span>UPCONTA</span>
+                  </div>
 
-                <button
-                  onClick={() => setActiveTab("ventas")}
-                  className={`px-4 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
-                    activeTab === "ventas"
-                      ? "bg-emerald-600 text-white border-emerald-300 ring-2 ring-emerald-400/50 shadow-md scale-[1.03]"
-                      : "bg-white text-emerald-700 hover:text-emerald-800 border-emerald-500 hover:border-emerald-600 hover:bg-emerald-50/80 hover:scale-[1.02]"
-                  }`}
-                >
-                  <DollarSign className="w-4 h-4 text-emerald-500" />
-                  <span className="uppercase tracking-wider font-black">Ventas</span>
-                </button>
-              </div>
-            ) : (
-              /* Full View when Unlocked with D180890S: All tabs visible */
+                  <button
+                    onClick={() => setActiveTab("plan")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "plan"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Plan</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("cuentas")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "cuentas"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <Landmark className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Cuentas</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("explorador")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "explorador"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Explorador</span>
+                  </button>
+                </div>
+
+                {/* DASHBOARD CENTER BUTTON */}
+                <div className="flex items-center justify-center gap-2 shrink-0 mx-auto px-2">
+                  <button
+                    onClick={() => setActiveTab("dashboard")}
+                    className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
+                      activeTab === "dashboard"
+                        ? "bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white border-amber-300 ring-2 ring-orange-400/50 scale-[1.03]"
+                        : "bg-gradient-to-r from-[#0B2545] via-[#103460] to-[#0B2545] text-amber-300 hover:text-white border-orange-500/70 hover:border-orange-400 hover:scale-[1.02]"
+                    }`}
+                  >
+                    <BarChart3 className="w-4 h-4 text-orange-400 fill-orange-400" />
+                    <span className="uppercase tracking-wider font-black">Dashboard UpConta</span>
+                  </button>
+                </div>
+
+                {/* GROUP 2: COMERCIAL */}
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
+                  <div className="px-2 py-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-200/50 flex items-center gap-1 shrink-0 select-none">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>COMERCIAL</span>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveTab("simulador")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "simulador"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <Calculator className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Simulador</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("contador")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "contador"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <Briefcase className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Contador</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("ventas")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "ventas"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Ventas</span>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* PROFILE 2: 123456 (FIRMAS ANF AC) */}
+            {accessProfile === "123456" && (
+              <>
+                {/* GROUP 1: INFO FIRMAS */}
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-amber-200/80 shadow-2xs gap-1 shrink-0">
+                  <div className="px-2 py-1 bg-amber-500/15 text-amber-900 text-[10px] font-black uppercase tracking-wider rounded-lg border border-amber-300 flex items-center gap-1 shrink-0 select-none">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    <span>FIRMAS ANF</span>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveTab("firmas")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "firmas"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <FileCheck className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Firmas</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("cuentas")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "cuentas"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <Landmark className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Cuentas (ANF AC)</span>
+                  </button>
+                </div>
+
+                {/* DASHBOARD CENTER BUTTON */}
+                <div className="flex items-center justify-center gap-2 shrink-0 mx-auto px-2">
+                  <button
+                    onClick={() => setActiveTab("dashboard")}
+                    className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-md border-2 whitespace-nowrap ${
+                      activeTab === "dashboard"
+                        ? "bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-slate-950 border-amber-300 ring-2 ring-amber-400/50 scale-[1.03]"
+                        : "bg-gradient-to-r from-[#0B2545] via-[#103460] to-[#0B2545] text-amber-300 hover:text-white border-amber-500/70 hover:border-amber-400 hover:scale-[1.02]"
+                    }`}
+                  >
+                    <BarChart3 className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    <span className="uppercase tracking-wider font-black">Dashboard Firmas</span>
+                  </button>
+                </div>
+
+                {/* GROUP 2: VENTAS */}
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
+                  <div className="px-2 py-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-200/50 flex items-center gap-1 shrink-0 select-none">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>COMERCIAL</span>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveTab("ventas")}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                      activeTab === "ventas"
+                        ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Ventas</span>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* PROFILE 3: 0000 (SUPER ADMIN / ACCESO TOTAL) */}
+            {accessProfile === "0000" && (
               <>
                 {/* GROUP 1: INFO */}
                 <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
@@ -2908,7 +3114,7 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* DASHBOARD & RALLY BUTTONS (CENTERED IN THE MIDDLE BETWEEN INFO AND COMERCIAL) */}
+                {/* DASHBOARD & RALLY BUTTONS */}
                 <div className="flex items-center justify-center gap-2 shrink-0 mx-auto px-2">
                   <button
                     onClick={() => setActiveTab("dashboard")}
@@ -5146,25 +5352,38 @@ export default function App() {
             {/* Header Banner for Cuentas Bancarias */}
             <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-6 rounded-2xl shadow-md border border-slate-700 space-y-2">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-500 text-slate-950 font-black shadow-sm">
+                <div className={`p-2.5 rounded-xl font-black shadow-sm ${
+                  companyMode === "upconta" ? "bg-orange-500 text-white" : companyMode === "firmas" ? "bg-amber-400 text-slate-950" : "bg-emerald-500 text-slate-950"
+                }`}>
                   <Landmark className="w-6 h-6" />
                 </div>
                 <div>
                   <h2 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                    <span>Cuentas Bancarias Oficiales para Depósito o Transferencia</span>
+                    <span>
+                      {companyMode === "upconta"
+                        ? "Cuenta Bancaria Oficial UpConta S.A.S."
+                        : companyMode === "firmas"
+                        ? "Cuenta Bancaria Oficial ANFAC (Firmas Electrónicas.ec)"
+                        : "Cuentas Bancarias Oficiales para Depósito o Transferencia"}
+                    </span>
                   </h2>
                   <p className="text-xs text-slate-300 font-medium">
-                    Utiliza cualquiera de estas cuentas para realizar el pago de Firmas Electrónicas o Planes UpConta. Copia los datos o la imagen para enviar al cliente por WhatsApp.
+                    {companyMode === "upconta"
+                      ? "Datos bancarios de Banco Pichincha para el pago de Planes Facturación, ERP Contable y Plan Contador UpConta."
+                      : companyMode === "firmas"
+                      ? "Datos bancarios de Banco Internacional para el pago de Firmas y Certificados Electrónicos."
+                      : "Utiliza cualquiera de estas cuentas para realizar el pago de Firmas Electrónicas o Planes UpConta. Copia los datos o la imagen para enviar al cliente por WhatsApp."}
                   </p>
                 </div>
               </div>
             </div>
 
             {/* Grid with 2 Cards: ANF AC and UPCONTA S.A.S. */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+            <div className={`grid grid-cols-1 ${companyMode === "all" ? "lg:grid-cols-2" : "max-w-2xl mx-auto"} gap-6 items-stretch`}>
               
-              {/* CARD 1: ANFAC AUTORIDAD DE CERTIFICACIÓN ECUADOR C.A. */}
-              <div className="bg-white border-2 border-amber-300 rounded-2xl p-6 shadow-sm space-y-5 flex flex-col justify-between relative overflow-hidden">
+              {/* CARD 1: ANFAC AUTORIDAD DE CERTIFICACIÓN ECUADOR C.A. (Visible for firmas and all) */}
+              {(companyMode === "firmas" || companyMode === "all") && (
+                <div className="bg-white border-2 border-amber-300 rounded-2xl p-6 shadow-sm space-y-5 flex flex-col justify-between relative overflow-hidden">
                 <div className="space-y-4">
                   {/* Card Header with Yellow & Blue theme */}
                   <div className="bg-[#0B2545] text-white p-4 rounded-xl flex items-center justify-between border border-amber-500/30">
@@ -5295,8 +5514,10 @@ export default function App() {
                   </button>
                 </div>
               </div>
+            )}
 
-              {/* CARD 2: UPCONTA S.A.S. */}
+            {/* CARD 2: UPCONTA S.A.S. */}
+            {(companyMode === "upconta" || companyMode === "all") && (
               <div className="bg-white border-2 border-orange-200 rounded-2xl p-6 shadow-sm space-y-5 flex flex-col justify-between relative overflow-hidden">
                 <div className="space-y-4">
                   {/* Card Header with Orange theme */}
@@ -5418,6 +5639,7 @@ export default function App() {
                   </button>
                 </div>
               </div>
+            )}
 
             </div>
           </div>
@@ -5427,13 +5649,13 @@ export default function App() {
         {activeTab === "contador" && <ContadorModule />}
 
         {/* ==================================== TABS: REGISTRO DE VENTAS ==================================== */}
-        {activeTab === "ventas" && <VentasModule />}
+        {activeTab === "ventas" && <VentasModule companyMode={companyMode} accessProfile={accessProfile} />}
 
         {/* ==================================== TABS: DASHBOARD METRICAS ==================================== */}
-        {activeTab === "dashboard" && <DashboardModule />}
+        {activeTab === "dashboard" && <DashboardModule companyMode={companyMode} />}
 
         {/* ==================================== TABS: RALLY DE VENTAS DAKAR ==================================== */}
-        {activeTab === "rally" && <RallyModule />}
+        {activeTab === "rally" && <RallyModule companyMode={companyMode} />}
 
       </main>
 

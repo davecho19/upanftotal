@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   DollarSign, 
   Calendar, 
@@ -166,7 +166,49 @@ interface AdicionalItem {
   subtotal: number;
 }
 
-export function VentasModule() {
+export interface VentasModuleProps {
+  companyMode?: "all" | "upconta" | "firmas" | "locked";
+  accessProfile?: "170622" | "123456" | "0000" | null;
+}
+
+export function VentasModule({ companyMode, accessProfile }: VentasModuleProps = {}) {
+  const mode = companyMode || (accessProfile === "170622" ? "upconta" : accessProfile === "123456" ? "firmas" : "all");
+
+  const availableAsesores = useMemo(() => {
+    if (mode === "upconta") {
+      return {
+        karla: "Karla Haro",
+        david: "David Santander",
+      };
+    }
+    if (mode === "firmas") {
+      return {
+        salome: "Salomé Estrella",
+        ismenia: "Ismenia Escalona",
+        evelyn: "Evelyn Narváez",
+      };
+    }
+    return ASESORES;
+  }, [mode]);
+
+  const availableProducts = useMemo(() => {
+    if (mode === "upconta") {
+      return {
+        facturacion: PRODUCTOS.facturacion,
+        erp: PRODUCTOS.erp,
+        contador: PRODUCTOS.contador,
+      };
+    }
+    if (mode === "firmas") {
+      return {
+        natural: PRODUCTOS.natural,
+        natural_ruc: PRODUCTOS.natural_ruc,
+        juridica: PRODUCTOS.juridica,
+      };
+    }
+    return PRODUCTOS;
+  }, [mode]);
+
   // Form State
   const [ruc, setRuc] = useState<string>("");
   const [nombre, setNombre] = useState<string>("");
@@ -188,6 +230,14 @@ export function VentasModule() {
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Reset asesor/producto if mode changes
+  useEffect(() => {
+    setAsesor("");
+    setProductoKey("");
+    setAdicionales([]);
+    setMontoRegistrado(0);
+  }, [mode]);
 
   // Format currency helpers
   const formatMoney = (val: number) => {
@@ -366,6 +416,72 @@ export function VentasModule() {
 
   return (
     <div className="space-y-8 animate-fade-in max-w-6xl mx-auto">
+      {/* Company Branding Banner */}
+      {mode === "upconta" ? (
+        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-5 rounded-3xl shadow-md border border-orange-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-orange-500 text-white font-black shadow-sm">
+              <UpContaLogo size="sm" lightMode={true} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                  Registro de Ventas • UpConta S.A.S.
+                </h2>
+                <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Código: 170622
+                </span>
+              </div>
+              <p className="text-xs text-orange-200/90 font-medium mt-0.5">
+                Planes Facturación, ERP Contable y Plan Contador • Asesores: <strong className="text-white">Karla Haro</strong> y <strong className="text-white">David Santander</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : mode === "firmas" ? (
+        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-5 rounded-3xl shadow-md border border-amber-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-amber-400 text-slate-950 font-black shadow-sm">
+              <AnfLogo size="sm" lightMode={true} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                  Registro de Ventas • Firmas Electrónicas.ec (ANF AC)
+                </h2>
+                <span className="bg-amber-400 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Código: 123456
+                </span>
+              </div>
+              <p className="text-xs text-amber-200/90 font-medium mt-0.5">
+                Certificados y Firmas Digitales • Asesoras: <strong className="text-white">Salomé Estrella</strong>, <strong className="text-white">Ismenia Escalona</strong> y <strong className="text-white">Evelyn Narváez</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-5 rounded-3xl shadow-md border border-blue-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-blue-500 text-white font-black shadow-sm">
+              <CoBrandLogo size="sm" lightMode={true} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                  Registro Oficial de Ventas Consolidado (UpConta &amp; ANF AC)
+                </h2>
+                <span className="bg-blue-400 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Super Admin
+                </span>
+              </div>
+              <p className="text-xs text-blue-200/90 font-medium mt-0.5">
+                Registro de transacciones de software contable y firmas electrónicas.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Status Message Banner if present */}
       {statusMessage && (
         <div
@@ -463,7 +579,7 @@ export function VentasModule() {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold text-sm focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all"
                 >
                   <option value="">Selecciona un asesor</option>
-                  {Object.entries(ASESORES).map(([key, label]) => (
+                  {Object.entries(availableAsesores).map(([key, label]) => (
                     <option key={key} value={key}>
                       {label}
                     </option>
@@ -483,17 +599,33 @@ export function VentasModule() {
                 className="w-full px-4 py-3 bg-slate-900 text-white border border-slate-800 rounded-xl font-bold text-sm focus:ring-2 focus:ring-orange-400 transition-all"
               >
                 <option value="">Selecciona un producto</option>
-                <optgroup label="Software Contable & ERP (UpConta)">
-                  <option value="facturacion">Planes Facturación</option>
-                  <option value="erp">Planes ERP Contable</option>
-                  <option value="contador">Plan Contador</option>
-                  <option value="emprende">Promo Emprende</option>
-                </optgroup>
-                <optgroup label="Firma Electrónica (ANF AC)">
-                  <option value="natural">Firma Natural</option>
-                  <option value="natural_ruc">Firma Natural con RUC</option>
-                  <option value="juridica">Firma Jurídica</option>
-                </optgroup>
+                {mode === "upconta" ? (
+                  <optgroup label="Software Contable & ERP (UpConta)">
+                    <option value="facturacion">Planes Facturación</option>
+                    <option value="erp">Planes ERP Contable</option>
+                    <option value="contador">Plan Contador</option>
+                  </optgroup>
+                ) : mode === "firmas" ? (
+                  <optgroup label="Firma Electrónica (ANF AC)">
+                    <option value="natural">Firma Natural</option>
+                    <option value="natural_ruc">Firma Natural con RUC</option>
+                    <option value="juridica">Firma Jurídica</option>
+                  </optgroup>
+                ) : (
+                  <>
+                    <optgroup label="Software Contable & ERP (UpConta)">
+                      <option value="facturacion">Planes Facturación</option>
+                      <option value="erp">Planes ERP Contable</option>
+                      <option value="contador">Plan Contador</option>
+                      <option value="emprende">Promo Emprende</option>
+                    </optgroup>
+                    <optgroup label="Firma Electrónica (ANF AC)">
+                      <option value="natural">Firma Natural</option>
+                      <option value="natural_ruc">Firma Natural con RUC</option>
+                      <option value="juridica">Firma Jurídica</option>
+                    </optgroup>
+                  </>
+                )}
               </select>
             </div>
           </div>
