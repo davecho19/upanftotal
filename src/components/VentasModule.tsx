@@ -205,6 +205,7 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
         natural: PRODUCTOS.natural,
         natural_ruc: PRODUCTOS.natural_ruc,
         juridica: PRODUCTOS.juridica,
+        emprende: PRODUCTOS.emprende,
       };
     }
     return PRODUCTOS;
@@ -607,10 +608,11 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
                     <option value="contador">Plan Contador</option>
                   </optgroup>
                 ) : mode === "firmas" ? (
-                  <optgroup label="Firma Electrónica (ANF AC)">
+                  <optgroup label="Firma Electrónica & Promociones (ANF AC)">
                     <option value="natural">Firma Natural</option>
                     <option value="natural_ruc">Firma Natural con RUC</option>
                     <option value="juridica">Firma Jurídica</option>
+                    <option value="emprende">Promo Emprende</option>
                   </optgroup>
                 ) : (
                   <>
@@ -618,12 +620,12 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
                       <option value="facturacion">Planes Facturación</option>
                       <option value="erp">Planes ERP Contable</option>
                       <option value="contador">Plan Contador</option>
-                      <option value="emprende">Promo Emprende</option>
                     </optgroup>
-                    <optgroup label="Firma Electrónica (ANF AC)">
+                    <optgroup label="Firma Electrónica & Promociones (ANF AC)">
                       <option value="natural">Firma Natural</option>
                       <option value="natural_ruc">Firma Natural con RUC</option>
                       <option value="juridica">Firma Jurídica</option>
+                      <option value="emprende">Promo Emprende</option>
                     </optgroup>
                   </>
                 )}

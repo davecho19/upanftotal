@@ -194,10 +194,10 @@ export default function App() {
   const [calcQuantity, setCalcQuantity] = useState<number>(1);
   
   // Advisor States (with dropdown selection & manual edit)
-  const [selectedAdvisorKey, setSelectedAdvisorKey] = useState<string>("salome");
-  const [advisorName, setAdvisorName] = useState<string>(ASESORES_DATA.salome.nombre);
-  const [advisorEmail, setAdvisorEmail] = useState<string>(ASESORES_DATA.salome.correo);
-  const [advisorPhone, setAdvisorPhone] = useState<string>("0990388493");
+  const [selectedAdvisorKey, setSelectedAdvisorKey] = useState<string>("david");
+  const [advisorName, setAdvisorName] = useState<string>(ASESORES_DATA.david.nombre);
+  const [advisorEmail, setAdvisorEmail] = useState<string>(ASESORES_DATA.david.correo);
+  const [advisorPhone, setAdvisorPhone] = useState<string>("0980690459");
 
   const handleSelectAdvisorKey = (key: string) => {
     setSelectedAdvisorKey(key);

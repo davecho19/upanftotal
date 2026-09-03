@@ -211,11 +211,8 @@ export interface AsesorInfo {
 }
 
 export const ASESORES_DATA: Record<string, AsesorInfo> = {
-  salome:  { nombre: "Salomé Estrella",  correo: "sestrella@upconta.com",  telefono: "+593 99 038 8493" },
-  karla:   { nombre: "Karla Haro",       correo: "kharo@upconta.com",      telefono: "+593 98 934 7443" },
-  ismenia: { nombre: "Ismenia Escalona", correo: "iescalona@upconta.com",  telefono: "+593 99 912 2519" },
-  evelyn:  { nombre: "Evelyn Narváez",   correo: "enarvaez@upconta.com",   telefono: "+593 98 194 7894" },
-  david:   { nombre: "David Santander",  correo: "dsantander@upconta.com", telefono: "+593 98 069 0459" }
+  david:   { nombre: "David Santander",  correo: "dsantander@upconta.com", telefono: "+593 98 069 0459" },
+  karla:   { nombre: "Karla Haro",       correo: "kharo@upconta.com",      telefono: "+593 98 934 7443" }
 };
 
 export interface AdicionalItem {
