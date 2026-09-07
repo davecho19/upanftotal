@@ -79,26 +79,37 @@ import { LinksModule } from "./components/LinksModule";
 import { MensajesModule } from "./components/MensajesModule";
 import { UpContaMascot } from "./components/UpContaMascot";
 import { CommercialLockScreen } from "./components/CommercialLockScreen";
+import { ReporteGerencialModule } from "./components/ReporteGerencialModule";
 
 export default function App() {
   // Access control state for multi-company division:
-  // - "170622": UpConta (tabs: plan, cuentas [UpConta], explorador, dashboard [Karla Haro, David Santander], simulador, contador, ventas)
-  // - "123456": Firmas ANF (tabs: firmas, cuentas [ANF], dashboard [Salomé, Ismenia, Evelyn], ventas)
-  // - "0000": Super Admin / Acceso Total (all tabs, full dashboard)
+  // - "180890": UpConta + pestaña de reporte
+  // - "170622": UpConta SIN pestaña de reporte
+  // - "1998": Firmas ANF + pestaña de reporte
+  // - "123456" (o "070926"): Firmas ANF SIN pestaña de reporte
+  // - "0000" (or alias "D180890S"): Perfil Gerencial (solo se vera el dashboard nada mas)
   // - null: Bloqueado (Home Lock Screen)
-  const [accessProfile, setAccessProfile] = useState<"170622" | "123456" | "0000" | null>(null);
-  const [accessCodeInput, setAccessCodeInput] = useState<string>("");
+  const [accessProfile, setAccessProfile] = useState<"180890" | "170622" | "1998" | "123456" | "0000" | null>(null);
+  const [accessCodeInput, setAccessCodeInput] = useState<string>("" );
   const [codeErrorMsg, setCodeErrorMsg] = useState<string>("");
 
   const isUnlocked = accessProfile !== null;
 
   const handleUnlockWithCode = (code: string): boolean => {
     const raw = code.trim();
-    if (raw === "170622") {
+    if (raw === "180890") {
+      setAccessProfile("180890");
+      setActiveTab("plan");
+      return true;
+    } else if (raw === "170622") {
       setAccessProfile("170622");
       setActiveTab("plan");
       return true;
-    } else if (raw === "123456") {
+    } else if (raw === "1998") {
+      setAccessProfile("1998");
+      setActiveTab("firmas");
+      return true;
+    } else if (raw === "123456" || raw === "070926") {
       setAccessProfile("123456");
       setActiveTab("firmas");
       return true;
@@ -127,22 +138,35 @@ export default function App() {
     setCodeErrorMsg("");
   };
 
-  // Main Tab State: "plan", "explorador", "simulador", "firmas", "cuentas", "ventas", "contador", "dashboard", "rally", "links", "mensajes"
-  const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard" | "rally" | "links" | "mensajes">("plan");
+  // Main Tab State: "plan", "explorador", "simulador", "firmas", "cuentas", "ventas", "contador", "dashboard", "rally", "links", "mensajes", "reporte_firmas", "reporte_upconta"
+  const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard" | "rally" | "links" | "mensajes" | "reporte_firmas" | "reporte_upconta">("plan");
 
   // Keep active tab safe based on accessProfile
   useEffect(() => {
-    if (accessProfile === "170622") {
-      const allowed = ["plan", "cuentas", "explorador", "dashboard", "simulador", "contador", "ventas", "links", "mensajes"];
+    if (accessProfile === "180890") {
+      const allowed = ["plan", "cuentas", "explorador", "dashboard", "simulador", "contador", "ventas", "links", "mensajes", "reporte_upconta", "rally"];
       if (!allowed.includes(activeTab)) {
         setActiveTab("plan");
       }
+    } else if (accessProfile === "170622") {
+      // 170622 no tiene pestaña reporte
+      const allowed = ["plan", "cuentas", "explorador", "dashboard", "simulador", "contador", "ventas", "links", "mensajes", "rally"];
+      if (!allowed.includes(activeTab)) {
+        setActiveTab("plan");
+      }
+    } else if (accessProfile === "1998") {
+      const allowed = ["firmas", "cuentas", "dashboard", "ventas", "reporte_firmas"];
+      if (!allowed.includes(activeTab)) {
+        setActiveTab("firmas");
+      }
     } else if (accessProfile === "123456") {
+      // 123456 no tiene pestaña reporte
       const allowed = ["firmas", "cuentas", "dashboard", "ventas"];
       if (!allowed.includes(activeTab)) {
         setActiveTab("firmas");
       }
     } else if (accessProfile === "0000") {
+      // En el perfil gerencial 0000 solo se vera el dashboard nada mas
       if (activeTab !== "dashboard") {
         setActiveTab("dashboard");
       }
@@ -150,9 +174,9 @@ export default function App() {
   }, [accessProfile, activeTab]);
 
   const companyMode: "all" | "upconta" | "firmas" | "locked" = 
-    accessProfile === "170622"
+    accessProfile === "180890" || accessProfile === "170622"
       ? "upconta"
-      : accessProfile === "123456"
+      : accessProfile === "1998" || accessProfile === "123456"
       ? "firmas"
       : accessProfile === "0000"
       ? "all"
@@ -2750,10 +2774,10 @@ export default function App() {
               <div className="hidden sm:block">
                 <div className="flex items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-full animate-pulse ${
-                    accessProfile === "123456" || activeTab === "firmas" ? "bg-amber-500" : "bg-orange-500"
+                    accessProfile === "1998" || accessProfile === "070926" || accessProfile === "123456" || activeTab === "firmas" ? "bg-amber-500" : "bg-orange-500"
                   }`}></span>
                   <span className="uppercase tracking-widest text-[9.5px] font-black text-[#0B2545]">
-                    {accessProfile === "123456"
+                    {accessProfile === "1998" || accessProfile === "070926" || accessProfile === "123456"
                       ? (activeTab === "firmas"
                           ? "Firmas Electrónicas.ec by: anf"
                           : activeTab === "cuentas"
@@ -2762,14 +2786,18 @@ export default function App() {
                           ? "Dashboard Métricas Firmas ANF"
                           : activeTab === "ventas"
                           ? "Ventas Firmas Electrónicas (ANF AC)"
+                          : activeTab === "reporte_firmas"
+                          ? "Reporte Comercial Firmas Electrónicas (ANF AC)"
                           : "Firmas Electrónicas ANFAC")
-                      : accessProfile === "170622"
+                      : accessProfile === "180890" || accessProfile === "170622"
                       ? (activeTab === "cuentas"
                           ? "Cuenta Bancaria Oficial UpConta S.A.S."
                           : activeTab === "dashboard"
                           ? "Dashboard Comercial UpConta"
                           : activeTab === "ventas"
                           ? "Registro de Ventas UpConta S.A.S."
+                          : activeTab === "reporte_upconta"
+                          ? "Reporte Comercial UpConta Ecuador"
                           : activeTab === "simulador"
                           ? "Cotizador Empresarial UpConta"
                           : activeTab === "contador"
@@ -2781,6 +2809,10 @@ export default function App() {
                           : "Plataforma Empresarial UpConta")
                       : (activeTab === "dashboard"
                           ? "Dashboard General Consolidado (UpConta & ANF)"
+                          : activeTab === "reporte_upconta"
+                          ? "Reporte Comercial UpConta Ecuador"
+                          : activeTab === "reporte_firmas"
+                          ? "Reporte Comercial Firmas Electrónicas (ANF AC)"
                           : activeTab === "firmas"
                           ? "Firmas Electrónicas.ec by: anf"
                           : activeTab === "cuentas"
@@ -2801,7 +2833,7 @@ export default function App() {
                   </span>
                 </div>
                 <h1 className="text-xs font-bold tracking-tight text-slate-600 mt-0.5">
-                  {accessProfile === "123456"
+                  {accessProfile === "1998" || accessProfile === "070926" || accessProfile === "123456"
                     ? (activeTab === "firmas"
                         ? "Certificación Digital & Firmas SRI"
                         : activeTab === "cuentas"
@@ -2810,6 +2842,8 @@ export default function App() {
                         ? "Métricas Estadísticas & Comisiones Firmas"
                         : activeTab === "ventas"
                         ? "Registro Oficial de Ventas Firmas"
+                        : activeTab === "reporte_firmas"
+                        ? "Presentación Ejecutiva y Embudo Comercial ANF AC"
                         : "Certificación Digital & Firmas SRI")
                     : activeTab === "firmas"
                     ? "Certificación Digital & Firmas SRI"
@@ -2823,6 +2857,10 @@ export default function App() {
                     ? "Registro Oficial de Ventas"
                     : activeTab === "dashboard"
                     ? "Métricas Estadísticas & Comisiones"
+                    : activeTab === "reporte_upconta"
+                    ? "Presentación Ejecutiva y Embudo Comercial UpConta"
+                    : activeTab === "reporte_firmas"
+                    ? "Presentación Ejecutiva y Embudo Comercial ANF AC"
                     : activeTab === "rally"
                     ? "Ruta de Carrera & Metas de Vendedores"
                     : activeTab === "links"
@@ -2838,12 +2876,12 @@ export default function App() {
             <div className="flex flex-wrap items-center gap-2 shrink-0 ml-auto">
               {/* Active Profile Badge (Discrete, no raw codes visible) */}
               <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-black tracking-wide border shadow-2xs">
-                {accessProfile === "170622" ? (
+                {accessProfile === "180890" || accessProfile === "170622" ? (
                   <span className="bg-orange-100 text-orange-800 border border-orange-300 px-2 py-0.5 rounded-lg flex items-center gap-1">
                     <Building2 className="w-3 h-3 text-orange-600" />
                     <span>Perfil UpConta</span>
                   </span>
-                ) : accessProfile === "123456" ? (
+                ) : accessProfile === "1998" || accessProfile === "070926" || accessProfile === "123456" ? (
                   <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-lg flex items-center gap-1">
                     <FileCheck className="w-3 h-3 text-amber-600" />
                     <span>Perfil Firmas ANF</span>
@@ -2851,7 +2889,7 @@ export default function App() {
                 ) : accessProfile === "0000" ? (
                   <span className="bg-blue-100 text-[#0B2545] border border-blue-300 px-2 py-0.5 rounded-lg flex items-center gap-1">
                     <ShieldCheck className="w-3 h-3 text-blue-600" />
-                    <span>Sesión Administrador</span>
+                    <span>Perfil Gerencial</span>
                   </span>
                 ) : null}
               </div>
@@ -2927,16 +2965,11 @@ export default function App() {
           {/* Underneath Logo: Tabs Header Multi-Company (NO TELEPROMPTER) */}
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 sm:gap-3 overflow-x-auto scrollbar-none flex-nowrap w-full">
             
-            {/* PROFILE 1: 170622 (UPCONTA) */}
-            {accessProfile === "170622" && (
+            {/* PROFILE 1: 180890 (UPCONTA) */}
+            {(accessProfile === "180890" || accessProfile === "170622") && (
               <>
-                {/* GROUP 1: INFO UPCONTA */}
+                {/* GROUP 1: OPERATIVO */}
                 <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-orange-200/80 shadow-2xs gap-1 shrink-0">
-                  <div className="px-2 py-1 bg-orange-500/15 text-orange-800 text-[10px] font-black uppercase tracking-wider rounded-lg border border-orange-300 flex items-center gap-1 shrink-0 select-none">
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-                    <span>UPCONTA</span>
-                  </div>
-
                   <button
                     onClick={() => setActiveTab("plan")}
                     className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
@@ -2972,6 +3005,21 @@ export default function App() {
                     <Sliders className="w-3.5 h-3.5 text-purple-400" />
                     <span>Explorador</span>
                   </button>
+
+                  {/* Pestaña de Reporte SOLO habilitada para la clave 180890 (no visible en 170622) */}
+                  {accessProfile === "180890" && (
+                    <button
+                      onClick={() => setActiveTab("reporte_upconta")}
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                        activeTab === "reporte_upconta"
+                          ? "bg-[#0B2545] text-white shadow-xs font-extrabold border border-orange-400 ring-1 ring-orange-400/50"
+                          : "text-slate-700 hover:text-slate-950 hover:bg-orange-100/70"
+                      }`}
+                    >
+                      <Building2 className="w-3.5 h-3.5 text-orange-500" />
+                      <span>Reporte</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* DASHBOARD CENTER BUTTON */}
@@ -2985,17 +3033,12 @@ export default function App() {
                     }`}
                   >
                     <BarChart3 className="w-4 h-4 text-orange-400 fill-orange-400" />
-                    <span className="uppercase tracking-wider font-black">Dashboard UpConta</span>
+                    <span className="uppercase tracking-wider font-black">Dashboard</span>
                   </button>
                 </div>
 
-                {/* GROUP 2: COMERCIAL */}
+                {/* GROUP 2: HERRAMIENTAS */}
                 <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
-                  <div className="px-2 py-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-200/50 flex items-center gap-1 shrink-0 select-none">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>COMERCIAL</span>
-                  </div>
-
                   <button
                     onClick={() => setActiveTab("simulador")}
                     className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
@@ -3059,16 +3102,11 @@ export default function App() {
               </>
             )}
 
-            {/* PROFILE 2: 123456 (FIRMAS ANF AC) */}
-            {accessProfile === "123456" && (
+            {/* PROFILE 2: 1998 (FIRMAS ANF AC) */}
+            {(accessProfile === "1998" || accessProfile === "070926" || accessProfile === "123456") && (
               <>
-                {/* GROUP 1: INFO FIRMAS */}
+                {/* GROUP 1: OPERATIVO */}
                 <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-amber-200/80 shadow-2xs gap-1 shrink-0">
-                  <div className="px-2 py-1 bg-amber-500/15 text-amber-900 text-[10px] font-black uppercase tracking-wider rounded-lg border border-amber-300 flex items-center gap-1 shrink-0 select-none">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                    <span>FIRMAS ANF</span>
-                  </div>
-
                   <button
                     onClick={() => setActiveTab("firmas")}
                     className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
@@ -3090,8 +3128,23 @@ export default function App() {
                     }`}
                   >
                     <Landmark className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Cuentas (ANF AC)</span>
+                    <span>Cuentas</span>
                   </button>
+
+                  {/* Pestaña de Reporte SOLO habilitada para la clave 1998 (no visible en 123456) */}
+                  {accessProfile === "1998" && (
+                    <button
+                      onClick={() => setActiveTab("reporte_firmas")}
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                        activeTab === "reporte_firmas"
+                          ? "bg-[#0B2545] text-white shadow-xs font-extrabold border border-amber-400 ring-1 ring-amber-400/50"
+                          : "text-slate-700 hover:text-slate-950 hover:bg-amber-100/70"
+                      }`}
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Reporte</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* DASHBOARD CENTER BUTTON */}
@@ -3105,17 +3158,12 @@ export default function App() {
                     }`}
                   >
                     <BarChart3 className="w-4 h-4 text-amber-400 fill-amber-400" />
-                    <span className="uppercase tracking-wider font-black">Dashboard Firmas</span>
+                    <span className="uppercase tracking-wider font-black">Dashboard</span>
                   </button>
                 </div>
 
                 {/* GROUP 2: VENTAS */}
                 <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs gap-1 shrink-0">
-                  <div className="px-2 py-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-200/50 flex items-center gap-1 shrink-0 select-none">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>COMERCIAL</span>
-                  </div>
-
                   <button
                     onClick={() => setActiveTab("ventas")}
                     className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
@@ -3131,24 +3179,17 @@ export default function App() {
               </>
             )}
 
-            {/* PROFILE 3: 0000 (SUPER ADMIN / ACCESO TOTAL - SOLO DASHBOARD CONSOLIDADO) */}
+            {/* PROFILE 3: 0000 (PERFIL GERENCIAL - SOLO SE VERA EL DASHBOARD NADA MAS) */}
             {accessProfile === "0000" && (
               <div className="flex items-center justify-center gap-2 shrink-0 mx-auto px-2">
-                <div className="flex items-center bg-slate-100 p-1.5 rounded-2xl border border-orange-200/80 shadow-xs gap-2">
-                  <div className="px-3 py-1.5 bg-orange-500/15 text-orange-950 text-xs font-black uppercase tracking-wider rounded-xl border border-orange-300 flex items-center gap-1.5 shrink-0 select-none">
-                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
-                    <span>Acceso Total Consolidado</span>
-                  </div>
-
+                <div className="flex items-center bg-slate-100 p-1.5 rounded-2xl border border-blue-200/80 shadow-xs gap-2">
+                  {/* Única pestaña visible: Dashboard */}
                   <button
                     onClick={() => setActiveTab("dashboard")}
-                    className="px-5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2.5 cursor-default bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white border-2 border-amber-300 ring-2 ring-orange-400/50 shadow-md scale-[1.02]"
+                    className="px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-xs bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white border-2 border-amber-300 ring-2 ring-orange-400/50 scale-[1.02]"
                   >
                     <BarChart3 className="w-4 h-4 text-amber-200 fill-amber-200" />
-                    <span className="uppercase tracking-wider font-black">Dashboard General (UpConta & ANF)</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider bg-white/20 text-white">
-                      En Vivo
-                    </span>
+                    <span className="uppercase tracking-wider font-black">Dashboard</span>
                   </button>
                 </div>
               </div>
@@ -5620,6 +5661,10 @@ export default function App() {
         {/* ==================================== TABS: DASHBOARD METRICAS ==================================== */}
         {activeTab === "dashboard" && <DashboardModule companyMode={companyMode} />}
 
+        {/* ==================================== TABS: REPORTES COMERCIALES GERENCIALES ==================================== */}
+        {activeTab === "reporte_upconta" && accessProfile === "180890" && <ReporteGerencialModule empresa="upconta" />}
+        {activeTab === "reporte_firmas" && accessProfile === "1998" && <ReporteGerencialModule empresa="firmas" />}
+
         {/* ==================================== TABS: RALLY DE VENTAS DAKAR ==================================== */}
         {activeTab === "rally" && <RallyModule companyMode={companyMode} />}
 
@@ -5659,9 +5704,9 @@ export default function App() {
       {/* Footer Branding section */}
       <footer className="max-w-7xl mx-auto px-6 mt-20 pt-8 border-t border-slate-900 text-center text-slate-500 text-xs">
         <p className="font-light leading-relaxed">
-          {accessProfile === "123456"
+          {accessProfile === "1998" || accessProfile === "070926" || accessProfile === "123456"
             ? "Firmas Electrónicas.ec by: anf © 2026. Todos los derechos reservados."
-            : accessProfile === "170622"
+            : accessProfile === "180890" || accessProfile === "170622"
             ? "UpConta S.A.S. © 2026. Todos los derechos reservados."
             : "UpConta & Firmas Electrónicas.ec by: anf © 2026. Todos los derechos reservados."}
         </p>

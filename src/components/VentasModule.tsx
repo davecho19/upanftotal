@@ -20,6 +20,7 @@ import {
   Award
 } from "lucide-react";
 import { UpContaLogo, AnfLogo, CoBrandLogo } from "./GodiLogo";
+import { INITIAL_OFFLINE_SALES } from "../salesData";
 
 // Google Apps Script WebApp Endpoint URL
 const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwRz2QlL1JYjPI8jpEkWbJWXJ4C-XjldZPx1Jp1_BhVf4ZTsa48epbJN-wnhIwW0bhV/exec";
@@ -169,11 +170,17 @@ interface AdicionalItem {
 
 export interface VentasModuleProps {
   companyMode?: "all" | "upconta" | "firmas" | "locked";
-  accessProfile?: "170622" | "123456" | "0000" | null;
+  accessProfile?: "180890" | "1998" | "070926" | "0000" | "170622" | "123456" | null;
 }
 
 export function VentasModule({ companyMode, accessProfile }: VentasModuleProps = {}) {
-  const mode = companyMode || (accessProfile === "170622" ? "upconta" : accessProfile === "123456" ? "firmas" : "all");
+  const mode =
+    companyMode ||
+    (accessProfile === "180890" || accessProfile === "170622"
+      ? "upconta"
+      : accessProfile === "1998" || accessProfile === "070926" || accessProfile === "123456"
+      ? "firmas"
+      : "all");
 
   const availableAsesores = useMemo(() => {
     if (mode === "upconta") {
@@ -391,6 +398,48 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
         method: "GET",
         mode: "no-cors",
       });
+
+      // Guardar también en el almacenamiento local para actualizar instantáneamente los reportes y dashboards
+      try {
+        const dateParts = (fecha || new Date().toISOString().split("T")[0]).split("-");
+        const monthNames = [
+          "January", "February", "March", "April", "May", "June",
+          "July", "August", "September", "October", "November", "December"
+        ];
+        const mIdx = parseInt(dateParts[1], 10) - 1;
+        const mesName = mIdx >= 0 && mIdx < 12 ? `${monthNames[mIdx]} ${dateParts[0]}` : "July 2026";
+
+        const newSaleItem = {
+          asesor: ASESORES[asesor] || asesor,
+          fecha: fecha || new Date().toISOString().split("T")[0],
+          ruc: ruc,
+          nombre: nombre,
+          tipo: finalTipoVenta || "Nuevo",
+          producto: PRODUCTOS[productoKey]?.label || productoKey,
+          plan: planLabel,
+          adicionales: adicionalesTexto,
+          valorPlan: Number(montoRegistrado) || 0,
+          valorAdicional: Number(totalAdicionales) || 0,
+          descuento: Number(descuento) || 0,
+          total: Number(totalInvertir) || 0,
+          totalSinIva: Number((totalInvertir / 1.15).toFixed(2)),
+          mes: mesName
+        };
+
+        let currentList: any[] = [];
+        const cached = localStorage.getItem("sales_data_db");
+        if (cached) {
+          try { currentList = JSON.parse(cached); } catch (e) {}
+        }
+        if (!Array.isArray(currentList) || currentList.length === 0) {
+          currentList = [...INITIAL_OFFLINE_SALES];
+        }
+        currentList.unshift(newSaleItem);
+        localStorage.setItem("sales_data_db", JSON.stringify(currentList));
+        window.dispatchEvent(new CustomEvent("sales_data_updated"));
+      } catch (cacheErr) {
+        console.warn("No se pudo cachear localmente la venta:", cacheErr);
+      }
 
       setStatusMessage({
         type: "success",

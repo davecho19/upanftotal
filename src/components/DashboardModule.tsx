@@ -412,18 +412,33 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
       if (csvText) {
         const parsedSales = parseSalesCSV(csvText);
         if (parsedSales.length > 0) {
-          setSales(parsedSales.slice(0, 5000));
+          const slice5000 = parsedSales.slice(0, 5000);
+          setSales(slice5000);
+          try {
+            localStorage.setItem("sales_data_db", JSON.stringify(slice5000));
+            window.dispatchEvent(new CustomEvent("sales_data_updated"));
+          } catch (e) {}
           setSyncStatus("success");
           return;
         }
       }
 
       // Default fallback to INITIAL_OFFLINE_SALES
-      setSales(INITIAL_OFFLINE_SALES.slice(0, 5000));
+      const fallbackSlice = INITIAL_OFFLINE_SALES.slice(0, 5000);
+      setSales(fallbackSlice);
+      try {
+        localStorage.setItem("sales_data_db", JSON.stringify(fallbackSlice));
+        window.dispatchEvent(new CustomEvent("sales_data_updated"));
+      } catch (e) {}
       setSyncStatus("success");
     } catch (error) {
       console.warn("Using offline dataset due to Google Sheets sync error:", error);
-      setSales(INITIAL_OFFLINE_SALES.slice(0, 5000));
+      const fallbackSlice = INITIAL_OFFLINE_SALES.slice(0, 5000);
+      setSales(fallbackSlice);
+      try {
+        localStorage.setItem("sales_data_db", JSON.stringify(fallbackSlice));
+        window.dispatchEvent(new CustomEvent("sales_data_updated"));
+      } catch (e) {}
       setSyncStatus("error");
     } finally {
       setIsLoading(false);

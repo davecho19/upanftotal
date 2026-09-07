@@ -229,15 +229,15 @@ export function DynamicBrandLogo({
   lightMode = false,
 }: {
   activeTab?: string;
-  accessProfile?: "170622" | "123456" | "0000" | null;
+  accessProfile?: "180890" | "1998" | "070926" | "0000" | "170622" | "123456" | null;
   size?: "sm" | "md" | "lg" | "xl" | "2xl";
   className?: string;
   lightMode?: boolean;
 }) {
-  if (accessProfile === "170622") {
+  if (accessProfile === "180890" || accessProfile === "170622") {
     return <UpContaLogo size={size} className={className} lightMode={lightMode} />;
   }
-  if (accessProfile === "123456") {
+  if (accessProfile === "1998" || accessProfile === "070926" || accessProfile === "123456") {
     return <AnfLogo size={size} className={className} lightMode={lightMode} />;
   }
   if (activeTab === "firmas") {
