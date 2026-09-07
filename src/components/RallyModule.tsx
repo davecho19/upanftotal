@@ -11,23 +11,11 @@ import {
   User
 } from "lucide-react";
 import { INITIAL_OFFLINE_SALES } from "../salesData";
-
-export interface SaleTransaction {
-  asesor: string;
-  fecha: string;
-  ruc: string;
-  nombre: string;
-  tipo: string;
-  producto: string;
-  plan: string;
-  adicionales: string;
-  valorPlan: number;
-  valorAdicional: number;
-  descuento: number;
-  total: number;
-  totalSinIva: number;
-  mes: string;
-}
+import { 
+  getStoredSales, 
+  mergeRemoteSalesWithLocal, 
+  SaleTransaction 
+} from "../utils/salesStorage";
 
 export interface SellerRallyConfig {
   id: string;
@@ -232,11 +220,25 @@ export interface RallyModuleProps {
 
 export function RallyModule({ companyMode = "all" }: RallyModuleProps = {}) {
   const currentMonthStr = getCurrentMonthString();
-  const [sales, setSales] = useState<SaleTransaction[]>(INITIAL_OFFLINE_SALES);
+  const [sales, setSales] = useState<SaleTransaction[]>(getStoredSales);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthStr);
   const [selectedPilot, setSelectedPilot] = useState<string>("all"); // "all" or seller.id
   const [lastSyncTime, setLastSyncTime] = useState<string>("En vivo");
+
+  // Real-time listener for sales updates
+  useEffect(() => {
+    const handleSalesUpdate = () => {
+      setSales(getStoredSales());
+      setLastSyncTime(new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    };
+    window.addEventListener("sales_data_updated", handleSalesUpdate);
+    window.addEventListener("storage", handleSalesUpdate);
+    return () => {
+      window.removeEventListener("sales_data_updated", handleSalesUpdate);
+      window.removeEventListener("storage", handleSalesUpdate);
+    };
+  }, []);
 
   // Fetch live sales data from Google Sheets / API
   const fetchSales = async () => {
@@ -324,11 +326,14 @@ export function RallyModule({ companyMode = "all" }: RallyModuleProps = {}) {
           }
         }
         if (parsed.length > 0) {
-          setSales(parsed);
+          const merged = mergeRemoteSalesWithLocal(parsed);
+          setSales(merged);
         }
       }
     } catch (err) {
       console.warn("Rally fallback to local offline data:", err);
+      const fallback = mergeRemoteSalesWithLocal(INITIAL_OFFLINE_SALES);
+      setSales(fallback);
     } finally {
       setIsLoading(false);
       setLastSyncTime(new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));

@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { INITIAL_OFFLINE_SALES } from "../salesData";
-import { SaleTransaction } from "./DashboardModule";
+import { SaleTransaction, getStoredSales } from "../utils/salesStorage";
 
 export interface ReporteGerencialModuleProps {
   empresa: "upconta" | "firmas";
@@ -364,29 +364,12 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
   }, [anioSeleccionado, mesSeleccionado, semanaSeleccionada]);
 
   // Base de datos de ventas real / offline sincronizada con el Dashboard
-  const [sales, setSales] = useState<SaleTransaction[]>(() => {
-    try {
-      const cached = localStorage.getItem("sales_data_db");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {}
-    return INITIAL_OFFLINE_SALES.slice(0, 5000);
-  });
+  const [sales, setSales] = useState<SaleTransaction[]>(getStoredSales);
 
   // Escuchar y recargar de localStorage si Dashboard o Registro de Ventas actualiza datos
   useEffect(() => {
     const reloadSales = () => {
-      try {
-        const cached = localStorage.getItem("sales_data_db");
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setSales(parsed);
-          }
-        }
-      } catch (e) {}
+      setSales(getStoredSales());
     };
     reloadSales();
     window.addEventListener("storage", reloadSales);

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { UpContaLogo, AnfLogo, CoBrandLogo } from "./GodiLogo";
 import { INITIAL_OFFLINE_SALES } from "../salesData";
+import { saveCustomRegisteredSale, SaleTransaction, getMonthFromDate, normalizeDateString } from "../utils/salesStorage";
 
 // Google Apps Script WebApp Endpoint URL
 const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwRz2QlL1JYjPI8jpEkWbJWXJ4C-XjldZPx1Jp1_BhVf4ZTsa48epbJN-wnhIwW0bhV/exec";
@@ -399,19 +400,14 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
         mode: "no-cors",
       });
 
-      // Guardar también en el almacenamiento local para actualizar instantáneamente los reportes y dashboards
+      // Guardar también en el almacenamiento persistente para actualizar instantáneamente los reportes y dashboards
       try {
-        const dateParts = (fecha || new Date().toISOString().split("T")[0]).split("-");
-        const monthNames = [
-          "January", "February", "March", "April", "May", "June",
-          "July", "August", "September", "October", "November", "December"
-        ];
-        const mIdx = parseInt(dateParts[1], 10) - 1;
-        const mesName = mIdx >= 0 && mIdx < 12 ? `${monthNames[mIdx]} ${dateParts[0]}` : "July 2026";
+        const cleanDate = normalizeDateString(fecha || new Date().toISOString().split("T")[0]);
+        const mesCalculado = getMonthFromDate(cleanDate);
 
-        const newSaleItem = {
+        const newSaleItem: SaleTransaction = {
           asesor: ASESORES[asesor] || asesor,
-          fecha: fecha || new Date().toISOString().split("T")[0],
+          fecha: cleanDate,
           ruc: ruc,
           nombre: nombre,
           tipo: finalTipoVenta || "Nuevo",
@@ -423,20 +419,10 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
           descuento: Number(descuento) || 0,
           total: Number(totalInvertir) || 0,
           totalSinIva: Number((totalInvertir / 1.15).toFixed(2)),
-          mes: mesName
+          mes: mesCalculado
         };
 
-        let currentList: any[] = [];
-        const cached = localStorage.getItem("sales_data_db");
-        if (cached) {
-          try { currentList = JSON.parse(cached); } catch (e) {}
-        }
-        if (!Array.isArray(currentList) || currentList.length === 0) {
-          currentList = [...INITIAL_OFFLINE_SALES];
-        }
-        currentList.unshift(newSaleItem);
-        localStorage.setItem("sales_data_db", JSON.stringify(currentList));
-        window.dispatchEvent(new CustomEvent("sales_data_updated"));
+        saveCustomRegisteredSale(newSaleItem);
       } catch (cacheErr) {
         console.warn("No se pudo cachear localmente la venta:", cacheErr);
       }

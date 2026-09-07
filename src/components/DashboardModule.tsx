@@ -39,48 +39,16 @@ import {
 } from "lucide-react";
 
 import { INITIAL_OFFLINE_SALES } from "../salesData";
-
-// Types
-export interface SaleTransaction {
-  asesor: string;
-  fecha: string; // YYYY-MM-DD
-  ruc: string;
-  nombre: string;
-  tipo: string;
-  producto: string;
-  plan: string;
-  adicionales: string;
-  valorPlan: number;
-  valorAdicional: number;
-  descuento: number;
-  total: number;
-  totalSinIva: number;
-  mes: string;
-}
+import { 
+  getStoredSales, 
+  mergeRemoteSalesWithLocal, 
+  normalizeDateString, 
+  getMonthFromDate, 
+  SaleTransaction 
+} from "../utils/salesStorage";
+export type { SaleTransaction };
 
 const COLORS = ["#0B2545", "#F97316", "#10B981", "#6366F1", "#8B5CF6", "#EC4899", "#14B8A6"];
-
-function normalizeDateString(dateStr: string): string {
-  if (!dateStr) return "";
-  const trimmed = dateStr.trim();
-  
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-
-  if (/^\d{4}[\/\.]\d{1,2}[\/\.]\d{1,2}$/.test(trimmed)) {
-    const parts = trimmed.split(/[\/\.]/);
-    return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
-  }
-
-  if (/^\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{4}$/.test(trimmed)) {
-    const parts = trimmed.split(/[\/\.-]/);
-    const d = parts[0].padStart(2, "0");
-    const m = parts[1].padStart(2, "0");
-    const y = parts[2];
-    return `${y}-${m}-${d}`;
-  }
-
-  return trimmed;
-}
 
 // Helper function to calculate month-isolated Friday-to-Thursday week info
 function getFridayToThursdayWeek(dateStr: string) {
@@ -308,10 +276,26 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   const currentMonthString = getCurrentMonthString();
   const defaultRange = getMonthDateRange(currentMonthString);
 
-  const [sales, setSales] = useState<SaleTransaction[]>(INITIAL_OFFLINE_SALES);
+  const [sales, setSales] = useState<SaleTransaction[]>(getStoredSales);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>("En vivo");
   const [syncStatus, setSyncStatus] = useState<"success" | "error" | "loading">("success");
+
+  // Real-time listener for registered sales across tabs and modules
+  useEffect(() => {
+    const handleSalesUpdate = () => {
+      const stored = getStoredSales();
+      setSales(stored);
+      setLastSyncTime(new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    };
+
+    window.addEventListener("sales_data_updated", handleSalesUpdate);
+    window.addEventListener("storage", handleSalesUpdate);
+    return () => {
+      window.removeEventListener("sales_data_updated", handleSalesUpdate);
+      window.removeEventListener("storage", handleSalesUpdate);
+    };
+  }, []);
 
   // Filters State
   const [timeFilter, setTimeFilter] = useState<"total" | "mes" | "mes_anterior" | "ano" | "semana" | "rango">("mes");
@@ -412,33 +396,23 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
       if (csvText) {
         const parsedSales = parseSalesCSV(csvText);
         if (parsedSales.length > 0) {
-          const slice5000 = parsedSales.slice(0, 5000);
-          setSales(slice5000);
-          try {
-            localStorage.setItem("sales_data_db", JSON.stringify(slice5000));
-            window.dispatchEvent(new CustomEvent("sales_data_updated"));
-          } catch (e) {}
+          const merged = mergeRemoteSalesWithLocal(parsedSales);
+          setSales(merged);
           setSyncStatus("success");
           return;
         }
       }
 
-      // Default fallback to INITIAL_OFFLINE_SALES
+      // Default fallback to INITIAL_OFFLINE_SALES merged with custom sales
       const fallbackSlice = INITIAL_OFFLINE_SALES.slice(0, 5000);
-      setSales(fallbackSlice);
-      try {
-        localStorage.setItem("sales_data_db", JSON.stringify(fallbackSlice));
-        window.dispatchEvent(new CustomEvent("sales_data_updated"));
-      } catch (e) {}
+      const mergedFallback = mergeRemoteSalesWithLocal(fallbackSlice);
+      setSales(mergedFallback);
       setSyncStatus("success");
     } catch (error) {
       console.warn("Using offline dataset due to Google Sheets sync error:", error);
       const fallbackSlice = INITIAL_OFFLINE_SALES.slice(0, 5000);
-      setSales(fallbackSlice);
-      try {
-        localStorage.setItem("sales_data_db", JSON.stringify(fallbackSlice));
-        window.dispatchEvent(new CustomEvent("sales_data_updated"));
-      } catch (e) {}
+      const mergedFallback = mergeRemoteSalesWithLocal(fallbackSlice);
+      setSales(mergedFallback);
       setSyncStatus("error");
     } finally {
       setIsLoading(false);
@@ -519,21 +493,6 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     return result;
   };
 
-  const getMonthFromDate = (dateStr: string) => {
-    const norm = normalizeDateString(dateStr);
-    if (!norm) return "Desconocido";
-    const parts = norm.split("-");
-    if (parts.length === 3) {
-      const year = parts[0];
-      const monthNum = parseInt(parts[1], 10);
-      const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-      if (monthNum >= 1 && monthNum <= 12) {
-        return `${months[monthNum - 1]} ${year}`;
-      }
-    }
-    return "Desconocido";
-  };
-
   // Helper check for UpConta vs Firmas sale line
   const isUpContaSale = (item: SaleTransaction) => {
     const prod = (item.producto || "").toLowerCase();
@@ -609,49 +568,28 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
 
   // Month matching helper
   const matchMonthFilter = (item: SaleTransaction, monthFilterValue: string) => {
-    if (monthFilterValue === "all" || monthFilterValue === "all_year") return true;
+    if (!monthFilterValue || monthFilterValue === "all" || monthFilterValue === "all_year") return true;
     
-    const mLower = monthFilterValue.toLowerCase();
-    const itemMesLower = (item.mes || "").toLowerCase();
-    const dateStr = item.fecha || "";
+    const mLower = monthFilterValue.toLowerCase().trim();
+    const itemMesLower = (item.mes || "").toLowerCase().trim();
+    if (itemMesLower && (itemMesLower === mLower || itemMesLower.includes(mLower) || mLower.includes(itemMesLower))) return true;
 
-    if (itemMesLower === mLower) return true;
-
-    if (mLower.includes("july") || mLower.includes("julio")) {
-      return itemMesLower.includes("july") || itemMesLower.includes("julio") || dateStr.startsWith("2026-07");
-    }
-    if (mLower.includes("june") || mLower.includes("junio")) {
-      return itemMesLower.includes("june") || itemMesLower.includes("junio") || dateStr.startsWith("2026-06");
-    }
-    if (mLower.includes("may") || mLower.includes("mayo")) {
-      return itemMesLower.includes("may") || itemMesLower.includes("mayo") || dateStr.startsWith("2026-05");
-    }
-    if (mLower.includes("april") || mLower.includes("abril")) {
-      return itemMesLower.includes("april") || itemMesLower.includes("abril") || dateStr.startsWith("2026-04");
-    }
-    if (mLower.includes("march") || mLower.includes("marzo")) {
-      return itemMesLower.includes("march") || itemMesLower.includes("marzo") || dateStr.startsWith("2026-03");
-    }
-    if (mLower.includes("february") || mLower.includes("febrero")) {
-      return itemMesLower.includes("february") || itemMesLower.includes("febrero") || dateStr.startsWith("2026-02");
-    }
-    if (mLower.includes("january") || mLower.includes("enero")) {
-      return itemMesLower.includes("january") || itemMesLower.includes("enero") || dateStr.startsWith("2026-01");
-    }
-    if (mLower.includes("august") || mLower.includes("agosto")) {
-      return itemMesLower.includes("august") || itemMesLower.includes("agosto") || dateStr.startsWith("2026-08");
-    }
-    if (mLower.includes("september") || mLower.includes("septiembre")) {
-      return itemMesLower.includes("september") || itemMesLower.includes("septiembre") || dateStr.startsWith("2026-09");
-    }
-    if (mLower.includes("october") || mLower.includes("octubre")) {
-      return itemMesLower.includes("october") || itemMesLower.includes("octubre") || dateStr.startsWith("2026-10");
-    }
-    if (mLower.includes("november") || mLower.includes("noviembre")) {
-      return itemMesLower.includes("november") || itemMesLower.includes("noviembre") || dateStr.startsWith("2026-11");
-    }
-    if (mLower.includes("december") || mLower.includes("diciembre")) {
-      return itemMesLower.includes("december") || itemMesLower.includes("diciembre") || dateStr.startsWith("2026-12");
+    const norm = normalizeDateString(item.fecha);
+    if (norm) {
+      const parts = norm.split("-");
+      if (parts.length >= 2) {
+        const y = parts[0];
+        const m = parseInt(parts[1], 10);
+        const monthNamesEn = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+        const monthNamesEs = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+        if (m >= 1 && m <= 12) {
+          const nameEn = monthNamesEn[m - 1];
+          const nameEs = monthNamesEs[m - 1];
+          if (mLower.includes(nameEn) || mLower.includes(nameEs)) {
+            if (mLower.includes(y) || !mLower.match(/\d{4}/)) return true;
+          }
+        }
+      }
     }
 
     return itemMesLower.includes(mLower);
@@ -741,7 +679,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   const latestSale = sortedSales.length > 0 ? sortedSales[0] : null;
 
   // Breakdown metrics for KPI cards (3 rows of 3 matching brand guidelines)
-  const totalVentasMonto = useMemo(() => filteredSales.reduce((acc, curr) => acc + curr.totalSinIva, 0), [filteredSales]);
+  const totalVentasMonto = useMemo(() => filteredSales.reduce((acc, curr) => acc + (Number(curr.totalSinIva) || (Number(curr.total) ? Number(curr.total) / 1.15 : 0) || 0), 0), [filteredSales]);
   const totalVentasSinIva = totalVentasMonto;
   const cantidadVentas = filteredSales.length;
   const ticketPromedio = cantidadVentas > 0 ? totalVentasMonto / cantidadVentas : 0;
@@ -749,11 +687,11 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   const salesUpConta = useMemo(() => filteredSales.filter(isUpContaSale), [filteredSales]);
   const salesFirmas = useMemo(() => filteredSales.filter(s => !isUpContaSale(s)), [filteredSales]);
 
-  const totalVentasUpConta = useMemo(() => salesUpConta.reduce((acc, curr) => acc + curr.totalSinIva, 0), [salesUpConta]);
+  const totalVentasUpConta = useMemo(() => salesUpConta.reduce((acc, curr) => acc + (Number(curr.totalSinIva) || (Number(curr.total) ? Number(curr.total) / 1.15 : 0) || 0), 0), [salesUpConta]);
   const cantidadUpConta = salesUpConta.length;
   const ticketPromedioUpConta = cantidadUpConta > 0 ? totalVentasUpConta / cantidadUpConta : 0;
 
-  const totalVentasFirmas = useMemo(() => salesFirmas.reduce((acc, curr) => acc + curr.totalSinIva, 0), [salesFirmas]);
+  const totalVentasFirmas = useMemo(() => salesFirmas.reduce((acc, curr) => acc + (Number(curr.totalSinIva) || (Number(curr.total) ? Number(curr.total) / 1.15 : 0) || 0), 0), [salesFirmas]);
   const cantidadFirmas = salesFirmas.length;
   const ticketPromedioFirmas = cantidadFirmas > 0 ? totalVentasFirmas / cantidadFirmas : 0;
 
@@ -763,13 +701,14 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     const adviserTotals: Record<string, { upconta: number; firmas: number; total: number }> = {};
 
     filteredSales.forEach(s => {
+      const val = Number(s.totalSinIva) || (Number(s.total) ? Number(s.total) / 1.15 : 0) || 0;
       if (!adviserTotals[s.asesor]) adviserTotals[s.asesor] = { upconta: 0, firmas: 0, total: 0 };
       if (isUpContaSale(s)) {
-        adviserTotals[s.asesor].upconta += s.totalSinIva;
+        adviserTotals[s.asesor].upconta += val;
       } else {
-        adviserTotals[s.asesor].firmas += s.totalSinIva;
+        adviserTotals[s.asesor].firmas += val;
       }
-      adviserTotals[s.asesor].total += s.totalSinIva;
+      adviserTotals[s.asesor].total += val;
     });
 
     Object.values(adviserTotals).forEach(adv => {
