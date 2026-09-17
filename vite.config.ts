@@ -13,7 +13,7 @@ export default defineConfig(() => {
         configureServer(server) {
           server.middlewares.use('/api/sheets', async (req, res) => {
             try {
-              const response = await fetch("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0");
+              const response = await fetch("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z5000");
               const csvText = await response.text();
               res.setHeader('Content-Type', 'text/csv; charset=utf-8');
               res.end(csvText);

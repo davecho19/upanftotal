@@ -364,7 +364,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
       // Attempt 2: Direct Google Sheets export URL
       if (!csvText) {
         try {
-          const primaryUrl = "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0";
+          const primaryUrl = "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z5000";
           const res0 = await fetch(primaryUrl);
           if (res0.ok) {
             const t = await res0.text();
@@ -380,7 +380,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
       // Attempt 3: AllOrigins CORS proxy fallback
       if (!csvText) {
         try {
-          const corsUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0");
+          const corsUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z5000");
           const resCors = await fetch(corsUrl);
           if (resCors.ok) {
             const t = await resCors.text();
