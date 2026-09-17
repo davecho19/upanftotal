@@ -80,6 +80,7 @@ import { MensajesModule } from "./components/MensajesModule";
 import { UpContaMascot } from "./components/UpContaMascot";
 import { CommercialLockScreen } from "./components/CommercialLockScreen";
 import { ReporteGerencialModule } from "./components/ReporteGerencialModule";
+import { getPlanArte, downloadPlanArte } from "./utils/planArtes";
 
 export default function App() {
   // Access control state for multi-company division:
@@ -600,6 +601,16 @@ export default function App() {
 
   const activePlanList = PLANES_DATA[tipoPlan] || [];
   const viewedPlanObj = (selectedPlanName && activePlanList.find(p => p.nombre === selectedPlanName)) || activePlanList[0] || null;
+
+  const [arteFeedback, setArteFeedback] = useState<string | null>(null);
+
+  const handleDescargarArte = async (planName: string) => {
+    const res = await downloadPlanArte(planName);
+    if (res.success) {
+      setArteFeedback(`Arte descargado: ${res.fileName}`);
+      setTimeout(() => setArteFeedback(null), 4000);
+    }
+  };
 
   // Sync active module when plan changes based on its tier modules
   useEffect(() => {
@@ -3467,6 +3478,24 @@ export default function App() {
                           <FileText className="w-3.5 h-3.5 text-slate-600" />
                           <span>Imprimir Ficha (Sin Precio)</span>
                         </button>
+                        {getPlanArte(viewedPlanObj.nombre) && (
+                          <button
+                            type="button"
+                            id="btn-descargar-arte"
+                            onClick={() => handleDescargarArte(viewedPlanObj.nombre)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer hover:shadow-md active:scale-95"
+                            title={`Descargar arte visual oficial (${getPlanArte(viewedPlanObj.nombre)?.downloadFileName})`}
+                          >
+                            <Image className="w-3.5 h-3.5" />
+                            <span>Arte</span>
+                          </button>
+                        )}
+                        {arteFeedback && (
+                          <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                            {arteFeedback}
+                          </span>
+                        )}
                       </div>
                     </div>
 
