@@ -7,6 +7,17 @@ import arteIdeal from '../assets/artes/up_ideal.png';
 import arteProfesional from '../assets/artes/up_profesional.png';
 import arteUltra from '../assets/artes/up_ultra.png';
 
+// ERP Artes Oficiales
+import arteErpStart from '../assets/artes/Plan-Up-Start (1).png';
+import arteErpPlus from '../assets/artes/Plan-Up-Plus (1).png';
+import arteErpPremium from '../assets/artes/Plan-Up-Premium (1).png';
+
+// Contador Artes Oficiales
+import arteComFunIlimitado from '../assets/artes/COM FUN LIMITADO.png';
+import arteContadorSegmentado from '../assets/artes/Plan-Contador-Segmentado.png';
+import arteContadorTax from '../assets/artes/Plan-Contador-TAX.png';
+import arteContadorIlimitado from '../assets/artes/Plan-Contador-Ilimitado.png';
+
 export interface PlanArteItem {
   planKey: string;
   planName: string;
@@ -17,6 +28,7 @@ export interface PlanArteItem {
 }
 
 export const PLAN_ARTES_MAP: Record<string, PlanArteItem> = {
+  // Facturación Electrónica
   "UP LIGHT": {
     planKey: "UP LIGHT",
     planName: "Up Light",
@@ -80,6 +92,106 @@ export const PLAN_ARTES_MAP: Record<string, PlanArteItem> = {
     downloadFileName: "8. ULTRA.png",
     imageUrl: arteUltra,
     precio: "$150 + IVA",
+  },
+
+  // Planes ERP
+  "ERP START": {
+    planKey: "ERP START",
+    planName: "ERP Start",
+    officialTitle: "Plan Up ERP Start",
+    downloadFileName: "Plan-Up-Start.png",
+    imageUrl: arteErpStart,
+    precio: "$34.31 / mes",
+  },
+  "ERP PLUS": {
+    planKey: "ERP PLUS",
+    planName: "ERP Plus",
+    officialTitle: "Plan Up ERP Plus",
+    downloadFileName: "Plan-Up-Plus.png",
+    imageUrl: arteErpPlus,
+    precio: "$50.00 / mes",
+  },
+  "ERP PREMIUN": {
+    planKey: "ERP PREMIUN",
+    planName: "ERP Premium",
+    officialTitle: "Plan Up ERP Premium",
+    downloadFileName: "Plan-Up-Premium.png",
+    imageUrl: arteErpPremium,
+    precio: "$79.90 / mes",
+  },
+  "ERP PREMIUM": {
+    planKey: "ERP PREMIUN",
+    planName: "ERP Premium",
+    officialTitle: "Plan Up ERP Premium",
+    downloadFileName: "Plan-Up-Premium.png",
+    imageUrl: arteErpPremium,
+    precio: "$79.90 / mes",
+  },
+
+  // Planes Contador
+  "CONTADOR 1 EMPRESA": {
+    planKey: "CONTADOR 1 EMPRESA",
+    planName: "Contador 1 Empresa",
+    officialTitle: "Plan Contador Segmentado UpConta",
+    downloadFileName: "Plan-Contador-Segmentado.png",
+    imageUrl: arteContadorSegmentado,
+    precio: "$50.00",
+  },
+  "CONTADOR 3 EMPRESA": {
+    planKey: "CONTADOR 3 EMPRESA",
+    planName: "Contador 3 Empresas",
+    officialTitle: "Plan Contador Segmentado UpConta",
+    downloadFileName: "Plan-Contador-Segmentado.png",
+    imageUrl: arteContadorSegmentado,
+    precio: "$100.00",
+  },
+  "CONTADOR 6 EMPRESA": {
+    planKey: "CONTADOR 6 EMPRESA",
+    planName: "Contador 6 Empresas",
+    officialTitle: "Plan Contador Segmentado UpConta",
+    downloadFileName: "Plan-Contador-Segmentado.png",
+    imageUrl: arteContadorSegmentado,
+    precio: "$150.00",
+  },
+  "CONTADOR 10 EMPRESA": {
+    planKey: "CONTADOR 10 EMPRESA",
+    planName: "Contador 10 Empresas",
+    officialTitle: "Plan Contador Segmentado UpConta",
+    downloadFileName: "Plan-Contador-Segmentado.png",
+    imageUrl: arteContadorSegmentado,
+    precio: "$200.00",
+  },
+  "TAX ILIMITADOS": {
+    planKey: "TAX ILIMITADOS",
+    planName: "Tax Ilimitados",
+    officialTitle: "Plan Contador TAX UpConta",
+    downloadFileName: "Plan-Contador-TAX.png",
+    imageUrl: arteContadorTax,
+    precio: "$100.00",
+  },
+  "CONTADOR ILIMITADO": {
+    planKey: "CONTADOR ILIMITADO",
+    planName: "Contador Ilimitado",
+    officialTitle: "Plan Contador Ilimitado UpConta",
+    downloadFileName: "Plan-Contador-Ilimitado.png",
+    imageUrl: arteContadorIlimitado,
+    precio: "$300.00",
+  },
+  "COM FUN LIMITADO": {
+    planKey: "COM FUN LIMITADO",
+    planName: "Com Fun Ilimitado",
+    officialTitle: "Com Fun Ilimitado UpConta",
+    downloadFileName: "COM FUN LIMITADO.png",
+    imageUrl: arteComFunIlimitado,
+    precio: "Consultar",
+  },
+  "COM FUN ILIMITADO": {
+    planKey: "COM FUN LIMITADO",
+    planName: "Com Fun Ilimitado",
+    officialTitle: "Com Fun Ilimitado UpConta",
+    downloadFileName: "COM FUN LIMITADO.png",
+    imageUrl: arteComFunIlimitado,
+    precio: "Consultar",
   }
 };
 
@@ -94,7 +206,12 @@ export function getPlanArte(planName?: string | null): PlanArteItem | null {
     return PLAN_ARTES_MAP[upper];
   }
 
-  // Fuzzy matching for variations (e.g. "LIGHT", "PLAN UP LIGHT", "IDEAL+", "PROFESIONAL")
+  // ERP Matching
+  if (upper.includes("START")) return PLAN_ARTES_MAP["ERP START"];
+  if (upper.includes("PLUS") && (upper.includes("ERP") || !upper.includes("UP"))) return PLAN_ARTES_MAP["ERP PLUS"];
+  if (upper.includes("PREMIUN") || upper.includes("PREMIUM")) return PLAN_ARTES_MAP["ERP PREMIUN"];
+
+  // Facturación Matching
   if (upper.includes("LIGHT")) return PLAN_ARTES_MAP["UP LIGHT"];
   if (upper.includes("BASE")) return PLAN_ARTES_MAP["UP BASE"];
   if (upper.includes("POWER")) return PLAN_ARTES_MAP["UP POWER"];
@@ -104,8 +221,15 @@ export function getPlanArte(planName?: string | null): PlanArteItem | null {
   if (upper.includes("PROFESIONAL") || upper.includes("PROFESSIONAL")) return PLAN_ARTES_MAP["UP PROFESIONAL PLUS"];
   if (upper.includes("ULTRA")) return PLAN_ARTES_MAP["UP ULTRA"];
 
+  // Contador Matching
+  if (upper.includes("COM FUN")) return PLAN_ARTES_MAP["COM FUN LIMITADO"];
+  if (upper.includes("TAX")) return PLAN_ARTES_MAP["TAX ILIMITADOS"];
+  if (upper.includes("CONTADOR ILIMITADO")) return PLAN_ARTES_MAP["CONTADOR ILIMITADO"];
+  if (upper.includes("CONTADOR")) return PLAN_ARTES_MAP["CONTADOR 1 EMPRESA"];
+
   return null;
 }
+
 
 /**
  * Triggers the browser download of the plan's visual art image with its exact official filename

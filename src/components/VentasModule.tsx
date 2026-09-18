@@ -452,73 +452,7 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
   const listaAdicionalesOpciones = productoKey === "contador" ? [...ADICIONALES_BASE, ...ADICIONALES_CONTADOR] : ADICIONALES_BASE;
 
   return (
-    <div className="space-y-8 animate-fade-in max-w-6xl mx-auto">
-      {/* Company Branding Banner */}
-      {mode === "upconta" ? (
-        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-5 rounded-3xl shadow-md border border-orange-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-orange-500 text-white font-black shadow-sm">
-              <UpContaLogo size="sm" lightMode={true} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
-                  Registro de Ventas • UpConta S.A.S.
-                </h2>
-                <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                  Código: 170622
-                </span>
-              </div>
-              <p className="text-xs text-orange-200/90 font-medium mt-0.5">
-                Planes Facturación, ERP Contable y Plan Contador • Asesores: <strong className="text-white">Karla Haro</strong> y <strong className="text-white">David Santander</strong>
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : mode === "firmas" ? (
-        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-5 rounded-3xl shadow-md border border-amber-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-amber-400 text-slate-950 font-black shadow-sm">
-              <AnfLogo size="sm" lightMode={true} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
-                  Registro de Ventas • Firmas Electrónicas.ec (ANF AC)
-                </h2>
-                <span className="bg-amber-400 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                  Código: 123456
-                </span>
-              </div>
-              <p className="text-xs text-amber-200/90 font-medium mt-0.5">
-                Certificados y Firmas Digitales • Asesoras: <strong className="text-white">Salomé Estrella</strong>, <strong className="text-white">Ismenia Escalona</strong> y <strong className="text-white">Evelyn Narváez</strong>
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-5 rounded-3xl shadow-md border border-blue-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-blue-500 text-white font-black shadow-sm">
-              <CoBrandLogo size="sm" lightMode={true} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
-                  Registro Oficial de Ventas Consolidado (UpConta &amp; ANF AC)
-                </h2>
-                <span className="bg-blue-400 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                  Super Admin
-                </span>
-              </div>
-              <p className="text-xs text-blue-200/90 font-medium mt-0.5">
-                Registro de transacciones de software contable y firmas electrónicas.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
+    <div className="space-y-6 animate-fade-in max-w-6xl mx-auto">
       {/* Status Message Banner if present */}
       {statusMessage && (
         <div

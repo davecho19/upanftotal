@@ -176,31 +176,6 @@ export function LinksModule() {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-6 rounded-2xl shadow-md border border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-orange-500 text-white font-black shadow-sm">
-            <Youtube className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-500/30 text-orange-300 border border-orange-400/40">
-                Biblioteca Oficial UpConta
-              </span>
-              <span className="text-xs text-slate-300 font-bold">
-                {filteredLinks.length} de {TUTORIAL_LINKS.length} videos
-              </span>
-            </div>
-            <h2 className="text-xl font-black tracking-tight text-white mt-0.5 flex items-center gap-2">
-              <span>Tutoriales y Enlaces de Soporte UpConta</span>
-            </h2>
-            <p className="text-xs text-slate-300 font-medium">
-              Guías oficiales en video para enviar a clientes o soporte técnico. Haz clic en copiar o abrir directamente.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-3">
         {/* Search input */}

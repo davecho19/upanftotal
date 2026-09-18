@@ -168,31 +168,6 @@ export function MensajesModule() {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-6 rounded-2xl shadow-md border border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-amber-500 text-white font-black shadow-sm">
-            <MessageSquare className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/30 text-amber-300 border border-amber-400/40">
-                Plantillas Editables de Atención
-              </span>
-              <span className="text-xs text-slate-300 font-bold">
-                Personaliza antes de copiar
-              </span>
-            </div>
-            <h2 className="text-xl font-black tracking-tight text-white mt-0.5">
-              Respuestas Rápidas Comerciales UpConta
-            </h2>
-            <p className="text-xs text-slate-300 font-medium">
-              Puedes editar directamente cualquier mensaje en el cuadro de texto para adaptarlo a tu cliente y luego hacer clic en "Copiar Mensaje".
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Filter Tabs */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Categories */}

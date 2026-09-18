@@ -21,6 +21,7 @@ export interface SaleTransaction {
 
 export const STORAGE_KEY_SALES = "sales_data_db";
 export const STORAGE_KEY_CUSTOM_SALES = "custom_registered_sales_db";
+export const STORAGE_KEY_SALES_VERSION = "sales_data_v_2026_09_17_realtime";
 
 export function normalizeDateString(dateStr: string): string {
   if (!dateStr) return "";
@@ -91,15 +92,23 @@ export function getStoredSales(): SaleTransaction[] {
 
     let baseSales: SaleTransaction[] = [];
     const baseRaw = localStorage.getItem(STORAGE_KEY_SALES);
-    if (baseRaw) {
+    const storedVersion = localStorage.getItem(STORAGE_KEY_SALES_VERSION);
+
+    if (baseRaw && storedVersion === STORAGE_KEY_SALES_VERSION) {
       try {
         const parsed = JSON.parse(baseRaw);
-        if (Array.isArray(parsed) && parsed.length > 0) baseSales = parsed;
+        if (Array.isArray(parsed) && parsed.length >= INITIAL_OFFLINE_SALES.length) {
+          baseSales = parsed;
+        }
       } catch (e) {}
     }
 
     if (baseSales.length === 0) {
-      baseSales = [...INITIAL_OFFLINE_SALES.slice(0, 5000)];
+      baseSales = [...INITIAL_OFFLINE_SALES.slice(0, 10000)];
+      try {
+        localStorage.setItem(STORAGE_KEY_SALES, JSON.stringify(baseSales));
+        localStorage.setItem(STORAGE_KEY_SALES_VERSION, STORAGE_KEY_SALES_VERSION);
+      } catch (e) {}
     }
 
     if (customSales.length > 0) {
@@ -115,7 +124,7 @@ export function getStoredSales(): SaleTransaction[] {
     return baseSales;
   } catch (e) {
     console.warn("Error reading stored sales:", e);
-    return INITIAL_OFFLINE_SALES.slice(0, 5000);
+    return INITIAL_OFFLINE_SALES.slice(0, 10000);
   }
 }
 
@@ -148,7 +157,7 @@ export function saveCustomRegisteredSale(sale: SaleTransaction): void {
     // 2. Save to sales_data_db as well
     const currentSales = getStoredSales();
     const updated = [saleItem, ...currentSales.filter(s => !isSameSale(s, saleItem))];
-    localStorage.setItem(STORAGE_KEY_SALES, JSON.stringify(updated.slice(0, 5000)));
+    localStorage.setItem(STORAGE_KEY_SALES, JSON.stringify(updated.slice(0, 10000)));
 
     // 3. Dispatch events to notify all tabs/components
     window.dispatchEvent(new CustomEvent("sales_data_updated", { detail: saleItem }));
@@ -170,11 +179,12 @@ export function mergeRemoteSalesWithLocal(remoteSales: SaleTransaction[]): SaleT
     }
 
     if (customSales.length === 0) {
-      const slice5000 = remoteSales.slice(0, 5000);
+      const slice10000 = remoteSales.slice(0, 10000);
       try {
-        localStorage.setItem(STORAGE_KEY_SALES, JSON.stringify(slice5000));
+        localStorage.setItem(STORAGE_KEY_SALES, JSON.stringify(slice10000));
+        localStorage.setItem(STORAGE_KEY_SALES_VERSION, STORAGE_KEY_SALES_VERSION);
       } catch (e) {}
-      return slice5000;
+      return slice10000;
     }
 
     const merged = [...customSales];
@@ -184,13 +194,107 @@ export function mergeRemoteSalesWithLocal(remoteSales: SaleTransaction[]): SaleT
       }
     }
 
-    const slice5000 = merged.slice(0, 5000);
+    const slice10000 = merged.slice(0, 10000);
     try {
-      localStorage.setItem(STORAGE_KEY_SALES, JSON.stringify(slice5000));
+      localStorage.setItem(STORAGE_KEY_SALES, JSON.stringify(slice10000));
+      localStorage.setItem(STORAGE_KEY_SALES_VERSION, STORAGE_KEY_SALES_VERSION);
     } catch (e) {}
-    return slice5000;
+    return slice10000;
   } catch (e) {
     console.warn("Error merging remote sales:", e);
     return remoteSales;
   }
+}
+
+export function isUpContaSale(item: SaleTransaction): boolean {
+  const prod = (item.producto || "").toLowerCase();
+  const plan = (item.plan || "").toLowerCase();
+  return prod.includes("plan") || prod.includes("facturaci") || prod.includes("erp") || prod.includes("contador") || prod.includes("upconta") || plan.includes("erp") || plan.includes("contador");
+}
+
+export function getCurrentMonthString(): string {
+  const now = new Date();
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  return `${months[now.getMonth()]} ${now.getFullYear()}`;
+}
+
+const SPANISH_MONTHS: Record<string, string> = {
+  "January": "Enero",
+  "February": "Febrero",
+  "March": "Marzo",
+  "April": "Abril",
+  "May": "Mayo",
+  "June": "Junio",
+  "July": "Julio",
+  "August": "Agosto",
+  "September": "Septiembre",
+  "October": "Octubre",
+  "November": "Noviembre",
+  "December": "Diciembre"
+};
+
+export function getSpanishCurrentMonthLabel(): string {
+  const current = getCurrentMonthString();
+  const [mName, y] = current.split(" ");
+  return `${SPANISH_MONTHS[mName] || mName} ${y}`;
+}
+
+export function matchMonth(item: SaleTransaction, targetMonth: string): boolean {
+  if (!targetMonth || targetMonth === "all_year" || targetMonth === "all") return true;
+  const mLower = targetMonth.toLowerCase();
+  const itemMesLower = (item.mes || "").toLowerCase();
+
+  const norm = normalizeDateString(item.fecha);
+  if (norm) {
+    const parts = norm.split("-");
+    if (parts.length >= 2) {
+      const y = parts[0];
+      const m = parseInt(parts[1], 10);
+      const monthNamesEn = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+      const monthNamesEs = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+      if (m >= 1 && m <= 12) {
+        const nameEn = monthNamesEn[m - 1];
+        const nameEs = monthNamesEs[m - 1];
+        if (mLower.includes(nameEn) || mLower.includes(nameEs)) {
+          if (mLower.includes(y) || !mLower.match(/\d{4}/)) return true;
+        }
+      }
+    }
+  }
+
+  return itemMesLower.includes(mLower);
+}
+
+export function calculateCurrentMonthTotals(sales: SaleTransaction[]) {
+  const currentMonthStr = getCurrentMonthString();
+  let up = 0;
+  let fi = 0;
+  let countUp = 0;
+  let countFi = 0;
+
+  for (const s of sales) {
+    if (matchMonth(s, currentMonthStr)) {
+      const isUp = isUpContaSale(s);
+      const val = Number(s.total) || 0;
+      if (isUp) {
+        up += val;
+        countUp++;
+      } else {
+        fi += val;
+        countFi++;
+      }
+    }
+  }
+
+  return {
+    upconta: up,
+    firmas: fi,
+    total: up + fi,
+    countUp,
+    countFi,
+    monthLabel: getSpanishCurrentMonthLabel()
+  };
 }

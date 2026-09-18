@@ -50,7 +50,9 @@ import {
   Printer,
   FileDown,
   MessageSquare,
-  Youtube
+  Youtube,
+  Eye,
+  X
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -80,7 +82,10 @@ import { MensajesModule } from "./components/MensajesModule";
 import { UpContaMascot } from "./components/UpContaMascot";
 import { CommercialLockScreen } from "./components/CommercialLockScreen";
 import { ReporteGerencialModule } from "./components/ReporteGerencialModule";
+import { BrochuresModule } from "./components/BrochuresModule";
 import { getPlanArte, downloadPlanArte } from "./utils/planArtes";
+import { CONTADOR_ARTES } from "./utils/contadorArtes";
+import { DEFAULT_UPCONTA_LOGO, getUpContaLogoPngDataUrl, downloadArteImage } from "./utils/logoHelper";
 
 export default function App() {
   // Access control state for multi-company division:
@@ -139,19 +144,22 @@ export default function App() {
     setCodeErrorMsg("");
   };
 
-  // Main Tab State: "plan", "explorador", "simulador", "firmas", "cuentas", "ventas", "contador", "dashboard", "rally", "links", "mensajes", "reporte_firmas", "reporte_upconta"
-  const [activeTab, setActiveTab] = useState<"plan" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard" | "rally" | "links" | "mensajes" | "reporte_firmas" | "reporte_upconta">("plan");
+  // Main Tab State: "plan", "brochures", "explorador", "simulador", "firmas", "cuentas", "ventas", "contador", "dashboard", "rally", "links", "mensajes", "reporte_firmas", "reporte_upconta"
+  const [activeTab, setActiveTab] = useState<"plan" | "brochures" | "explorador" | "simulador" | "firmas" | "cuentas" | "ventas" | "contador" | "dashboard" | "rally" | "links" | "mensajes" | "reporte_firmas" | "reporte_upconta">("plan");
+
+  // Sub-menú de la pestaña Plan ("catalogo" | "cuentas")
+  const [planSubTab, setPlanSubTab] = useState<"catalogo" | "cuentas">("catalogo");
 
   // Keep active tab safe based on accessProfile
   useEffect(() => {
     if (accessProfile === "180890") {
-      const allowed = ["plan", "cuentas", "explorador", "dashboard", "simulador", "contador", "ventas", "links", "mensajes", "reporte_upconta", "rally"];
+      const allowed = ["plan", "brochures", "cuentas", "explorador", "dashboard", "simulador", "contador", "ventas", "links", "mensajes", "reporte_upconta", "rally"];
       if (!allowed.includes(activeTab)) {
         setActiveTab("plan");
       }
     } else if (accessProfile === "170622") {
       // 170622 no tiene pestaña reporte
-      const allowed = ["plan", "cuentas", "explorador", "dashboard", "simulador", "contador", "ventas", "links", "mensajes", "rally"];
+      const allowed = ["plan", "brochures", "cuentas", "explorador", "dashboard", "simulador", "contador", "ventas", "links", "mensajes", "rally"];
       if (!allowed.includes(activeTab)) {
         setActiveTab("plan");
       }
@@ -239,11 +247,25 @@ export default function App() {
   // Selected electronic signature type tab state
   const [selectedSigType, setSelectedSigType] = useState<"PERSONA NATURAL" | "PERSONA NATURAL RUC" | "PERSONA JURIDICA" | "PROMO EMPRENDE">("PERSONA NATURAL");
 
-  // Custom Client Logo
-  const [customLogo, setCustomLogo] = useState<string>("");
-  const [customLogoName, setCustomLogoName] = useState<string>("");
+  // Custom Client Logo - UpConta logo is default and always present unless custom logo uploaded
+  const [customLogo, setCustomLogo] = useState<string>(DEFAULT_UPCONTA_LOGO);
+  const [customLogoName, setCustomLogoName] = useState<string>("Logo UpConta Principal");
+  const [isCustomLogoActive, setIsCustomLogoActive] = useState<boolean>(false);
   const [customPlanPrice, setCustomPlanPrice] = useState<number | null>(null);
   const [logoDimensions, setLogoDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  // Modal for previewing official flyer images
+  const [previewImageModal, setPreviewImageModal] = useState<{ url: string; title: string; downloadFileName?: string } | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPreviewImageModal(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Custom PDF Background Image (Watermark)
   const [pdfBgImage, setPdfBgImage] = useState<string>("");
@@ -895,6 +917,7 @@ export default function App() {
         const base64Str = reader.result as string;
         setCustomLogo(base64Str);
         setCustomLogoName(file.name);
+        setIsCustomLogoActive(true);
         
         const img = new window.Image();
         img.onload = () => {
@@ -904,6 +927,13 @@ export default function App() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleResetToDefaultLogo = () => {
+    setCustomLogo(DEFAULT_UPCONTA_LOGO);
+    setCustomLogoName("Logo UpConta Principal");
+    setIsCustomLogoActive(false);
+    setLogoDimensions(null);
   };
 
   const handleBgImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1383,7 +1413,7 @@ export default function App() {
     const MX = 14;
     const CONTENT_W = PAGE_W - (MX * 2); // 182mm
     const todayFormatted = new Date().toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" });
-    const totalPages = 1 + plansToInclude.length;
+    const totalPages = 1;
 
     // Helper: Draw UpConta Vector/Canvas Logo
     const drawUpContaLogo = (doc: jsPDF, x: number = MX, y: number = 11) => {
@@ -1759,303 +1789,6 @@ export default function App() {
 
     drawAdvisorAndFooter(pdf, 1);
 
-    // ==========================================
-    // PAGES 2 TO N+1: FICHAS TÉCNICAS INDIVIDUALES POR PLAN
-    // ==========================================
-    plansToInclude.forEach((plan, planIdx) => {
-      pdf.addPage();
-      const pageNum = planIdx + 2;
-
-      pdf.setFillColor(255, 255, 255);
-      pdf.rect(0, 0, PAGE_W, PAGE_H, "F");
-
-      drawUpContaLogo(pdf, MX, 11);
-
-      // Top Header: Right aligned Official Title
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(10.5);
-      pdf.setTextColor(11, 37, 69);
-      pdf.text("FICHA TÉCNICA OFICIAL DE PLAN", PAGE_W - MX, 14, { align: "right" });
-
-      pdf.setFontSize(14);
-      pdf.setTextColor(11, 37, 69);
-      pdf.text(plan.nombre.toUpperCase(), PAGE_W - MX, 20.5, { align: "right" });
-
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(100, 116, 139);
-      pdf.text(`PLAN ${planIdx + 1} DE ${plansToInclude.length} • UPCONTA ECUADOR`, PAGE_W - MX, 25.5, { align: "right" });
-
-      // Blue Accent separator line
-      pdf.setDrawColor(11, 37, 69);
-      pdf.setLineWidth(0.7);
-      pdf.line(MX, 28.5, PAGE_W - MX, 28.5);
-
-      // 2 TOP BOXES SIDE BY SIDE (y = 31.5)
-      const boxTopY = 31.5;
-      const boxW = (CONTENT_W - 6) / 2; // 88mm
-      const boxH = 43;
-      const box1X = MX;
-      const box2X = MX + boxW + 6;
-
-      const metrics = extractQuickMetrics(plan.modulos);
-
-      // BOX 1: ESPECIFICACIONES & LÍMITES
-      pdf.setFillColor(11, 37, 69);
-      pdf.rect(box1X, boxTopY, boxW, 6.5, "F");
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(255, 255, 255);
-      pdf.text("ESPECIFICACIONES & LÍMITES", box1X + (boxW / 2), boxTopY + 4.5, { align: "center" });
-
-      pdf.setDrawColor(203, 213, 225);
-      pdf.setLineWidth(0.3);
-      pdf.rect(box1X, boxTopY, boxW, boxH, "S");
-
-      let compText = metrics.comprobantes || (plan.comprobantes || "Comprobantes Ilimitados");
-      if (categoryKey === "contador") {
-        compText = plan.tier === "contador_tax" ? "Tax Ilimitado SRI" : "No incluye comprobantes (Opcional)";
-      }
-
-      let rucText = plan.ruc ? `${plan.ruc} Empresas` : (plan.valor === "ilimitadas" || plan.valor === "tax_ilimitado" ? "Empresas Ilimitadas" : (plan.valor ? `${plan.valor} Empresas` : (metrics.empresas || "1 Empresa")));
-
-      const specRows = [
-        { label: "Plan:", value: plan.nombre },
-        { label: "Categoría / Tier:", value: plan.tier.toUpperCase() },
-        { label: "Comprobantes SRI:", value: compText },
-        { label: "Usuarios Habilitados:", value: metrics.usuarios || (plan.usuarios || "1 Usuario") },
-        { label: "Límite Empresas / RUC:", value: rucText }
-      ];
-
-      let rowY = boxTopY + 11.5;
-      specRows.forEach((r, sIdx) => {
-        if (sIdx % 2 === 1) {
-          pdf.setFillColor(248, 250, 252);
-          pdf.rect(box1X + 0.5, rowY - 3.5, boxW - 1, 6.8, "F");
-        }
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(7.5);
-        pdf.setTextColor(11, 37, 69);
-        pdf.text(r.label, box1X + 3.5, rowY);
-
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(7.5);
-        pdf.setTextColor(30, 41, 59);
-        pdf.text(r.value, box1X + boxW - 3.5, rowY, { align: "right" });
-
-        rowY += 7;
-      });
-
-      // BOX 2: DESGLOSE FINANCIERO OFICIAL
-      pdf.setFillColor(11, 37, 69);
-      pdf.rect(box2X, boxTopY, boxW, 6.5, "F");
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(255, 255, 255);
-      pdf.text("DESGLOSE FINANCIERO OFICIAL", box2X + (boxW / 2), boxTopY + 4.5, { align: "center" });
-
-      pdf.setDrawColor(203, 213, 225);
-      pdf.setLineWidth(0.3);
-      pdf.rect(box2X, boxTopY, boxW, boxH, "S");
-
-      if (categoryKey === "erp") {
-        const baseMensual = plan.precio;
-        const baseAnual = plan.precioAnual || (plan.precio * 12);
-        const ivaAnual = baseAnual * 0.15;
-        const totalAnual = baseAnual + ivaAnual;
-
-        const finRows = [
-          { label: "Precio Mensual:", value: `$${baseMensual.toFixed(2)} USD / mes` },
-          { label: "Precio Base Anual:", value: `$${baseAnual.toFixed(2)} USD` },
-          { label: "IVA Ecuador (15%):", value: `$${ivaAnual.toFixed(2)} USD` }
-        ];
-
-        let finY = boxTopY + 13;
-        finRows.forEach((r, fIdx) => {
-          if (fIdx % 2 === 1) {
-            pdf.setFillColor(248, 250, 252);
-            pdf.rect(box2X + 0.5, finY - 3.5, boxW - 1, 7.5, "F");
-          }
-          pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(7.5);
-          pdf.setTextColor(11, 37, 69);
-          pdf.text(r.label, box2X + 3.5, finY);
-
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(7.5);
-          pdf.setTextColor(30, 41, 59);
-          pdf.text(r.value, box2X + boxW - 3.5, finY, { align: "right" });
-
-          finY += 7.5;
-        });
-
-        const totalBarY = boxTopY + boxH - 7.5;
-        pdf.setFillColor(11, 37, 69);
-        pdf.rect(box2X, totalBarY, boxW, 7.5, "F");
-
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(7.5);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text("TOTAL ESTIMADO CON IVA", box2X + 3.5, totalBarY + 5);
-
-        pdf.setFontSize(9.5);
-        pdf.setTextColor(251, 191, 36);
-        pdf.text(`$${totalAnual.toFixed(2)} USD`, box2X + boxW - 3.5, totalBarY + 5, { align: "right" });
-      } else {
-        const basePrice = plan.precio;
-        const iva = basePrice * 0.15;
-        const total = basePrice + iva;
-
-        const finRows = [
-          { label: "Precio Base Plan:", value: `$${basePrice.toFixed(2)} USD` },
-          { label: "Modalidad de Pago:", value: "Pago Anual" },
-          { label: "IVA Ecuador (15%):", value: `$${iva.toFixed(2)} USD` }
-        ];
-
-        let finY = boxTopY + 13;
-        finRows.forEach((r, fIdx) => {
-          if (fIdx % 2 === 1) {
-            pdf.setFillColor(248, 250, 252);
-            pdf.rect(box2X + 0.5, finY - 3.5, boxW - 1, 7.5, "F");
-          }
-          pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(7.5);
-          pdf.setTextColor(11, 37, 69);
-          pdf.text(r.label, box2X + 3.5, finY);
-
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(7.5);
-          pdf.setTextColor(30, 41, 59);
-          pdf.text(r.value, box2X + boxW - 3.5, finY, { align: "right" });
-
-          finY += 7.5;
-        });
-
-        const totalBarY = boxTopY + boxH - 7.5;
-        pdf.setFillColor(11, 37, 69);
-        pdf.rect(box2X, totalBarY, boxW, 7.5, "F");
-
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(7.5);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text("TOTAL ESTIMADO CON IVA", box2X + 3.5, totalBarY + 5);
-
-        pdf.setFontSize(9.5);
-        pdf.setTextColor(251, 191, 36);
-        pdf.text(`$${total.toFixed(2)} USD`, box2X + boxW - 3.5, totalBarY + 5, { align: "right" });
-      }
-
-      // SECTION: DESGLOSE DE MÓDULOS TRONCALES
-      const modSectionY = boxTopY + boxH + 4; // ~78.5mm
-      pdf.setFillColor(11, 37, 69);
-      pdf.rect(MX, modSectionY, CONTENT_W, 6.5, "F");
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(255, 255, 255);
-      pdf.text(`DESGLOSE DE MÓDULOS TRONCALES INCLUIDOS EN EL PLAN (${plan.nombre.toUpperCase()})`, PAGE_W / 2, modSectionY + 4.5, { align: "center" });
-
-      const modulosList = MODULOS_POR_TIER[plan.tier] || ["ADMINISTRATIVO", "PRODUCCIÓN"];
-      const contentStartY = modSectionY + 8.5;
-
-      if (modulosList.length <= 2) {
-        const colW = (CONTENT_W - 5) / 2;
-        modulosList.forEach((modName, mIdx) => {
-          const colX = MX + (mIdx * (colW + 5));
-          const subList = DETALLE_SUBMODULOS[modName] || [];
-
-          pdf.setFillColor(11, 37, 69);
-          pdf.rect(colX, contentStartY, colW, 5.5, "F");
-          pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(7);
-          pdf.setTextColor(255, 255, 255);
-          pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), contentStartY + 3.8, { align: "center" });
-
-          let subY = contentStartY + 9.5;
-          subList.forEach((subItem) => {
-            const cleanItem = subItem.replace(/^##/, "").trim();
-            pdf.setFont("helvetica", "normal");
-            pdf.setFontSize(6.8);
-            pdf.setTextColor(30, 41, 59);
-            pdf.text(`• ${cleanItem}`, colX + 3, subY);
-            subY += 4.5;
-          });
-
-          const totalBoxH = 142;
-          pdf.setDrawColor(203, 213, 225);
-          pdf.setLineWidth(0.3);
-          pdf.rect(colX, contentStartY, colW, totalBoxH, "S");
-        });
-      } else if (modulosList.length === 3) {
-        const colW = (CONTENT_W - 6) / 3;
-        modulosList.forEach((modName, mIdx) => {
-          const colX = MX + (mIdx * (colW + 3));
-          const subList = DETALLE_SUBMODULOS[modName] || [];
-
-          pdf.setFillColor(11, 37, 69);
-          pdf.rect(colX, contentStartY, colW, 5.5, "F");
-          pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(6.8);
-          pdf.setTextColor(255, 255, 255);
-          pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), contentStartY + 3.8, { align: "center" });
-
-          let subY = contentStartY + 9.5;
-          subList.forEach((subItem) => {
-            const cleanItem = subItem.replace(/^##/, "").trim();
-            pdf.setFont("helvetica", "normal");
-            pdf.setFontSize(6.5);
-            pdf.setTextColor(30, 41, 59);
-            pdf.text(`• ${cleanItem}`, colX + 2.5, subY);
-            subY += 4.2;
-          });
-
-          const totalBoxH = 142;
-          pdf.setDrawColor(203, 213, 225);
-          pdf.setLineWidth(0.3);
-          pdf.rect(colX, contentStartY, colW, totalBoxH, "S");
-        });
-      } else {
-        const colW = (CONTENT_W - 6) / 3;
-        const colPositions = [MX, MX + colW + 3, MX + (colW * 2) + 6];
-        const colYTracker = [contentStartY, contentStartY, contentStartY];
-
-        modulosList.forEach((modName) => {
-          let targetCol = 0;
-          if (colYTracker[1] < colYTracker[targetCol]) targetCol = 1;
-          if (colYTracker[2] < colYTracker[targetCol]) targetCol = 2;
-
-          const colX = colPositions[targetCol];
-          const cardStartY = colYTracker[targetCol];
-          const subList = DETALLE_SUBMODULOS[modName] || [];
-
-          pdf.setFillColor(11, 37, 69);
-          pdf.rect(colX, cardStartY, colW, 5, "F");
-          pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(6.5);
-          pdf.setTextColor(255, 255, 255);
-          pdf.text(`MÓDULO: ${modName.toUpperCase()}`, colX + (colW / 2), cardStartY + 3.5, { align: "center" });
-
-          let subY = cardStartY + 8.5;
-          subList.forEach((subItem) => {
-            const cleanItem = subItem.replace(/^##/, "").trim();
-            pdf.setFont("helvetica", "normal");
-            pdf.setFontSize(6);
-            pdf.setTextColor(30, 41, 59);
-            pdf.text(`• ${cleanItem}`, colX + 2, subY);
-            subY += 3.4;
-          });
-
-          const cardH = subY - cardStartY + 1.5;
-          pdf.setDrawColor(203, 213, 225);
-          pdf.setLineWidth(0.3);
-          pdf.rect(colX, cardStartY, colW, cardH, "S");
-
-          colYTracker[targetCol] = cardStartY + cardH + 3;
-        });
-      }
-
-      drawAdvisorAndFooter(pdf, pageNum);
-    });
-
     pdf.save(`Brochure-UpConta-${catFileTitle}.pdf`);
   };
 
@@ -2143,6 +1876,10 @@ export default function App() {
     let logoH = 0;
     if (customLogo) {
       try {
+        let logoData = customLogo;
+        if (customLogo === DEFAULT_UPCONTA_LOGO || customLogo.endsWith(".svg")) {
+          logoData = getUpContaLogoPngDataUrl();
+        }
         let logoW = 65; // enlarged default (was 45)
         logoH = 32; // enlarged default (was 22)
         if (logoDimensions) {
@@ -2157,7 +1894,7 @@ export default function App() {
           }
         }
         // Embed the base64 custom client logo keeping its aspect ratio
-        pdf.addImage(customLogo, "JPEG", MX, 8, logoW, logoH);
+        pdf.addImage(logoData, "PNG", MX, 8, logoW, logoH);
       } catch (e) {
         logoH = 16;
       }
@@ -2584,6 +2321,10 @@ export default function App() {
     let p2LogoH = 0;
     if (customLogo) {
       try {
+        let logoData = customLogo;
+        if (customLogo === DEFAULT_UPCONTA_LOGO || customLogo.endsWith(".svg")) {
+          logoData = getUpContaLogoPngDataUrl();
+        }
         let logoW = 55; // enlarged default (was 38)
         p2LogoH = 25; // enlarged default (was 18)
         if (logoDimensions) {
@@ -2597,7 +2338,7 @@ export default function App() {
             logoW = 30 * aspect;
           }
         }
-        pdf.addImage(customLogo, "JPEG", MX, 8, logoW, p2LogoH);
+        pdf.addImage(logoData, "PNG", MX, 8, logoW, p2LogoH);
       } catch (e) {
         p2LogoH = 16;
       }
@@ -2817,6 +2558,8 @@ export default function App() {
                           ? "Tutoriales & Enlaces UpConta"
                           : activeTab === "mensajes"
                           ? "Respuestas Rápidas Comerciales"
+                          : activeTab === "brochures"
+                          ? "Brochures Oficiales para Descarga"
                           : "Plataforma Empresarial UpConta")
                       : (activeTab === "dashboard"
                           ? "Dashboard General Consolidado (UpConta & ANF)"
@@ -2828,6 +2571,8 @@ export default function App() {
                           ? "Firmas Electrónicas.ec by: anf"
                           : activeTab === "cuentas"
                           ? "Cuentas Bancarias Oficiales ANF & UpConta"
+                          : activeTab === "brochures"
+                          ? "Brochures Oficiales para Descarga"
                           : activeTab === "simulador"
                           ? "Cotizador Empresarial UpConta & ANF"
                           : activeTab === "contador"
@@ -2878,6 +2623,8 @@ export default function App() {
                     ? "Biblioteca Oficial de Videos de Soporte y Capacitación"
                     : activeTab === "mensajes"
                     ? "Plantillas y Respuestas Rápidas para Clientes"
+                    : activeTab === "brochures"
+                    ? "Descarga de Brochures PDF Oficiales"
                     : "Fichas Técnicas & Cotizador"}
                 </h1>
               </div>
@@ -2982,7 +2729,10 @@ export default function App() {
                 {/* GROUP 1: OPERATIVO */}
                 <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-orange-200/80 shadow-2xs gap-1 shrink-0">
                   <button
-                    onClick={() => setActiveTab("plan")}
+                    onClick={() => {
+                      setActiveTab("plan");
+                      setPlanSubTab("catalogo");
+                    }}
                     className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                       activeTab === "plan"
                         ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
@@ -2994,15 +2744,15 @@ export default function App() {
                   </button>
 
                   <button
-                    onClick={() => setActiveTab("cuentas")}
+                    onClick={() => setActiveTab("brochures")}
                     className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                      activeTab === "cuentas"
+                      activeTab === "brochures"
                         ? "bg-[#0B2545] text-white shadow-xs font-extrabold"
                         : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
                     }`}
                   >
-                    <Landmark className="w-3.5 h-3.5 text-orange-400" />
-                    <span>Cuentas</span>
+                    <FileDown className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Brochures</span>
                   </button>
 
                   <button
@@ -3215,129 +2965,277 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-6 mt-8 space-y-8">
         
         {/* ==================================== TABS: PLAN (CATALOGUE & DETAILS) ==================================== */}
+        {/* ==================================== TABS: PLAN (CATALOGUE & DETAILS) ==================================== */}
         {activeTab === "plan" && (
-          <div className="space-y-8 animate-fade-in">
-            {/* Step-by-Step Category Picker */}
-            <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-md">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-5">
-            <div>
-              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-[#0B2545]" />
-                1. Selecciona el Tipo de Plan Contable / Software
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Explora las capacidades analíticas de cada categoría. Todos los planes se facturan en modalidad anual (únicamente los planes ERP permiten modalidad anual o mensual).
-              </p>
-            </div>
-            
-            {/* Quick stats indicators & Advisor Selector & Brochure Button */}
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <div className="hidden xl:flex gap-3 text-xs font-medium text-slate-500 mr-1">
-                <div>Facturación: <span className="text-[#0B2545] font-bold">8</span></div>
-                <div className="border-l border-slate-200 pl-3">ERP: <span className="text-[#0B2545] font-bold">3</span></div>
-                <div className="border-l border-slate-200 pl-3">Contador: <span className="text-[#0B2545] font-bold">6</span></div>
-              </div>
-
-              {/* Selector de Asesor Comercial sincronizado */}
-              <div className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs transition-colors">
-                <Users className="w-3.5 h-3.5 text-[#0B2545] shrink-0" />
-                <span className="text-[11px] font-bold text-slate-600 shrink-0">Asesor:</span>
-                <select
-                  id="select-advisor-plan-tab"
-                  value={selectedAdvisorKey}
-                  onChange={(e) => handleSelectAdvisorKey(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-[#0B2545] focus:outline-none cursor-pointer pr-1"
-                  title="Seleccionar Asesor Comercial para Brochures y Fichas Técnicas"
+          <div className="space-y-6 animate-fade-in">
+            {/* Mini Menú de Navegación del Plan: Categorías y Sub-menú Cuentas */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 p-2.5 rounded-2xl shadow-xs">
+              {/* Selector compacto de Tipo de Plan en una sola línea */}
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlanSubTab("catalogo");
+                    setTipoPlan("facturacion");
+                  }}
+                  className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shadow-2xs ${
+                    planSubTab === "catalogo" && tipoPlan === "facturacion"
+                      ? "bg-[#0B2545] text-white shadow-xs"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200/80 hover:text-slate-900 border border-slate-200/60"
+                  }`}
                 >
-                  <option value="">-- Seleccionar Asesor --</option>
-                  {Object.entries(ASESORES_DATA).map(([key, as]) => (
-                    <option key={key} value={key}>
-                      {as.nombre} ({as.telefono})
-                    </option>
-                  ))}
-                  <option value="custom">Otro (Manual)</option>
-                </select>
-              </div>
+                  <FileText className={`w-4 h-4 ${planSubTab === "catalogo" && tipoPlan === "facturacion" ? "text-orange-400" : "text-slate-500"}`} />
+                  <span>Facturación</span>
+                </button>
 
-              <button
-                id="btn-brochure-planes"
-                onClick={() => handleGenerarBrochurePDF(tipoPlan)}
-                className="px-4 py-2 bg-[#0B2545] hover:bg-[#003566] text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-md hover:shadow-lg active:scale-95 flex items-center gap-2 border border-[#0B2545]/20 shrink-0"
-                title={`Descargar Brochure en PDF con todos los planes de ${tipoPlan === "facturacion" ? "Facturación Electrónica" : tipoPlan === "erp" ? "ERP Administrativo" : "Planes para Contadores"}`}
-              >
-                <FileDown className="w-4 h-4 text-orange-400 shrink-0" />
-                <span>Brochure {tipoPlan === "facturacion" ? "Facturación" : tipoPlan === "erp" ? "ERP" : "Contadores"}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlanSubTab("catalogo");
+                    setTipoPlan("erp");
+                  }}
+                  className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shadow-2xs ${
+                    planSubTab === "catalogo" && tipoPlan === "erp"
+                      ? "bg-[#0B2545] text-white shadow-xs"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200/80 hover:text-slate-900 border border-slate-200/60"
+                  }`}
+                >
+                  <Database className={`w-4 h-4 ${planSubTab === "catalogo" && tipoPlan === "erp" ? "text-orange-400" : "text-slate-500"}`} />
+                  <span>ERP</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlanSubTab("catalogo");
+                    setTipoPlan("contador");
+                  }}
+                  className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shadow-2xs ${
+                    planSubTab === "catalogo" && tipoPlan === "contador"
+                      ? "bg-[#0B2545] text-white shadow-xs"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200/80 hover:text-slate-900 border border-slate-200/60"
+                  }`}
+                >
+                  <Users className={`w-4 h-4 ${planSubTab === "catalogo" && tipoPlan === "contador" ? "text-orange-400" : "text-slate-500"}`} />
+                  <span>Contadores</span>
+                </button>
+
+                <div className="h-6 w-[1px] bg-slate-200 mx-1 hidden sm:block"></div>
+
+                {/* Sub-menú Cuentas dentro de Plan */}
+                <button
+                  type="button"
+                  onClick={() => setPlanSubTab("cuentas")}
+                  className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shadow-2xs ${
+                    planSubTab === "cuentas"
+                      ? "bg-[#0B2545] text-white shadow-xs"
+                      : "bg-orange-50 text-orange-950 hover:bg-orange-100 border border-orange-200"
+                  }`}
+                >
+                  <Landmark className={`w-4 h-4 ${planSubTab === "cuentas" ? "text-orange-400" : "text-orange-600"}`} />
+                  <span>Cuentas Bancarias</span>
+                </button>
+              </div>
             </div>
+
+            {/* VISTA 1: SUB-MENÚ CUENTAS */}
+            {planSubTab === "cuentas" && (
+              <div className="space-y-6">
+                <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-5 rounded-2xl shadow-md border border-slate-700 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl font-black shadow-sm bg-orange-500 text-white">
+                      <Landmark className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black tracking-tight text-white flex items-center gap-2">
+                        <span>Cuenta Bancaria Oficial UpConta S.A.S.</span>
+                      </h2>
+                      <p className="text-xs text-slate-300 font-medium">
+                        Datos bancarios de Banco Pichincha para el pago de Planes Facturación, ERP Contable y Plan Contador UpConta. Copia los datos o la imagen para enviar al cliente por WhatsApp.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="max-w-2xl mx-auto">
+                  <div className="bg-white border-2 border-orange-200 rounded-2xl p-6 shadow-sm space-y-5 flex flex-col justify-between relative overflow-hidden">
+                    <div className="space-y-4">
+                      <div className="bg-[#0B2545] text-white p-4 rounded-xl flex items-center justify-between border border-orange-500/30">
+                        <div>
+                          <h3 className="text-base font-black text-white uppercase tracking-wide flex items-center gap-2">
+                            <span>Datos para pago</span>
+                          </h3>
+                          <span className="text-[11px] font-extrabold text-orange-400 uppercase tracking-wider block mt-0.5">
+                            DEPÓSITO O TRANSFERENCIA
+                          </span>
+                        </div>
+                        <span className="bg-orange-500 text-white font-black text-xs px-2.5 py-1 rounded-lg uppercase shadow-2xs">
+                          UPCONTA S.A.S.
+                        </span>
+                      </div>
+
+                      <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-200/60 space-y-2.5 text-xs text-slate-800 font-semibold">
+                        <div className="flex items-start gap-1.5">
+                          <span className="text-orange-500 font-black">▶</span>
+                          <div>
+                            <span className="text-[11px] text-slate-500 font-bold block">Razón Social:</span>
+                            <span className="font-extrabold text-slate-900 text-sm">UPCONTA S.A.S.</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-1.5 pt-1.5 border-t border-orange-200/40">
+                          <span className="text-orange-500 font-black">▶</span>
+                          <div>
+                            <span className="text-[11px] text-slate-500 font-bold block">RUC:</span>
+                            <span className="font-extrabold text-slate-800">1793221216001</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-1.5 pt-1.5 border-t border-orange-200/40">
+                          <span className="text-orange-500 font-black">▶</span>
+                          <div>
+                            <span className="text-[11px] text-slate-500 font-bold block">Banco:</span>
+                            <span className="font-extrabold text-slate-800">Banco Pichincha</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-1.5 pt-1.5 border-t border-orange-200/40">
+                          <span className="text-orange-500 font-black">▶</span>
+                          <div>
+                            <span className="text-[11px] text-slate-500 font-bold block">Tipo de cuenta:</span>
+                            <span className="font-extrabold text-slate-800">Ahorros</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-1.5 pt-1.5 border-t border-orange-200/40">
+                          <span className="text-orange-500 font-black">▶</span>
+                          <div>
+                            <span className="text-[11px] text-slate-500 font-bold block">Número de Cuenta:</span>
+                            <span className="font-black text-sky-700 text-base">2212935613</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-1.5 pt-1.5 border-t border-orange-200/40">
+                          <span className="text-orange-500 font-black">▶</span>
+                          <div>
+                            <span className="text-[11px] text-slate-500 font-bold block">Correo electrónico:</span>
+                            <span className="font-bold text-slate-800">tesoreria@upconta.com</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-1.5 pt-1.5 border-t border-orange-200/40">
+                          <span className="text-orange-500 font-black">▶</span>
+                          <div>
+                            <span className="text-[11px] text-slate-500 font-bold block">Teléfono:</span>
+                            <span className="font-bold text-slate-800">02 382 6772</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#0B2545] text-orange-400 text-center py-2 px-4 rounded-xl text-xs font-black tracking-wider">
+                        UPCONTA S.A.S. • www.upconta.com
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={handleCopyUpContaBankImage}
+                        className="w-full py-2.5 px-4 bg-orange-500 hover:bg-orange-600 active:scale-98 text-white font-black text-xs rounded-xl shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2 border border-orange-400"
+                      >
+                        {copiedUpContaBankImage ? (
+                          <>
+                            <Check className="w-4 h-4 text-white" />
+                            <span>¡Imagen Copiada al Portapapeles!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-4 h-4 text-white" />
+                            <span>Copiar Imagen para Pegar en WhatsApp</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCopyUpContaBankText}
+                        className="w-full py-2 px-4 bg-white hover:bg-slate-100 active:scale-98 text-slate-800 font-bold text-xs rounded-xl border border-slate-300 transition-all cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        {copiedUpContaBankText ? (
+                          <>
+                            <Check className="w-4 h-4 text-emerald-600" />
+                            <span>¡Texto de Cuenta Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="w-4 h-4 text-slate-600" />
+                            <span>Copiar Texto de Cuenta Bancaria</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* VISTA 2: CATÁLOGO DE PLANES (Facturación, ERP, Contadores) */}
+            {planSubTab === "catalogo" && (
+              <>
+
+        {/* 4 Artes Oficiales para Plan Contador (Misma estructura visual que Imagen 2 adjunta) */}
+        {tipoPlan === "contador" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
+            {CONTADOR_ARTES.map((arte) => (
+              <div
+                key={arte.id}
+                className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex items-center justify-between gap-2.5 hover:border-slate-300 transition-colors"
+              >
+                {/* Thumbnail con clic para previsualizar */}
+                <button
+                  type="button"
+                  onClick={() => setPreviewImageModal({
+                    url: arte.imageUrl,
+                    title: arte.title,
+                    downloadFileName: arte.downloadFileName
+                  })}
+                  className="shrink-0 relative group cursor-pointer focus:outline-hidden"
+                  title={`Previsualizar ${arte.title}`}
+                >
+                  <img
+                    src={arte.imageUrl}
+                    alt={arte.title}
+                    className="w-12 h-16 sm:w-14 sm:h-18 object-contain rounded-xl border border-amber-300 bg-white p-0.5 shadow-2xs group-hover:scale-105 transition-transform"
+                  />
+                  <span className="absolute inset-0 rounded-xl bg-black/0 group-hover:bg-black/15 transition-colors flex items-center justify-center">
+                    <Eye className="w-3.5 h-3.5 text-white opacity-0 group-hover:opacity-100 drop-shadow-md transition-opacity" />
+                  </span>
+                </button>
+
+                {/* Badge y título truncado limpio */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <span className="inline-block bg-[#FFB703] text-slate-950 font-black text-[9px] px-2 py-0.5 rounded-md uppercase tracking-wider">
+                    {arte.badge}
+                  </span>
+                  <h5 className="text-xs font-black text-slate-900 truncate" title={arte.title}>
+                    {arte.shortTitle}
+                  </h5>
+                </div>
+
+                {/* Botón Descargar Naranja alado */}
+                <button
+                  type="button"
+                  onClick={() => downloadArteImage(arte.imageUrl, arte.downloadFileName)}
+                  className="bg-[#FF9100] hover:bg-[#F77F00] text-slate-950 font-black text-[11px] px-3 py-2 rounded-xl flex items-center gap-1 shadow-2xs hover:shadow-xs transition-all cursor-pointer shrink-0 active:scale-95"
+                  title={`Descargar ${arte.title}`}
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Descargar</span>
+                </button>
+              </div>
+            ))}
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-            
-            {/* Facturacion Tab */}
-            <button
-              onClick={() => setTipoPlan("facturacion")}
-              className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group ${
-                tipoPlan === "facturacion"
-                  ? "bg-blue-50/60 border-[#0B2545] shadow-sm"
-                  : "bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/50"
-              }`}
-            >
-              <div className="flex justify-between items-start">
-                <div className="p-2 bg-[#0B2545]/10 border border-[#0B2545]/20 text-[#0B2545] rounded-lg">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded text-slate-600 font-bold uppercase">Lite-Mesa</span>
-              </div>
-              <h3 className="text-sm font-bold text-slate-800 mt-3 flex items-center gap-1.5">
-                Facturación Electrónica
-                {tipoPlan === "facturacion" && <span className="w-1.5 h-1.5 rounded-full bg-[#0B2545] animate-ping"></span>}
-              </h3>
-            </button>
-
-            {/* ERP Tab */}
-            <button
-              onClick={() => setTipoPlan("erp")}
-              className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group ${
-                tipoPlan === "erp"
-                  ? "bg-blue-50/60 border-[#0B2545] shadow-sm"
-                  : "bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/50"
-              }`}
-            >
-              <div className="flex justify-between items-start">
-                <div className="p-2 bg-[#0B2545]/10 border border-[#0B2545]/20 text-[#0B2545] rounded-lg">
-                  <Database className="w-5 h-5" />
-                </div>
-                <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded text-slate-600 font-bold uppercase">Full Control</span>
-              </div>
-              <h3 className="text-sm font-bold text-slate-800 mt-3 flex items-center gap-1.5">
-                ERP Administrativo Completo
-                {tipoPlan === "erp" && <span className="w-1.5 h-1.5 rounded-full bg-[#0B2545] animate-ping"></span>}
-              </h3>
-            </button>
-
-            {/* Contador Tab */}
-            <button
-              onClick={() => setTipoPlan("contador")}
-              className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group ${
-                tipoPlan === "contador"
-                  ? "bg-blue-50/60 border-[#0B2545] shadow-sm"
-                  : "bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/50"
-              }`}
-            >
-              <div className="flex justify-between items-start">
-                <div className="p-2 bg-[#0B2545]/10 border border-[#0B2545]/20 text-[#0B2545] rounded-lg">
-                  <Users className="w-5 h-5" />
-                </div>
-                <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded text-slate-600 font-bold uppercase">Multi-RUC</span>
-              </div>
-              <h3 className="text-sm font-bold text-slate-800 mt-3 flex items-center gap-1.5">
-                Planes para Contadores
-                {tipoPlan === "contador" && <span className="w-1.5 h-1.5 rounded-full bg-[#0B2545] animate-ping"></span>}
-              </h3>
-            </button>
-
-          </div>
-        </section>
+        )}
 
         {/* Catalog & Explorer Split View */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -3458,7 +3356,7 @@ export default function App() {
                         }
                       </p>
 
-                      {/* Botones Imprimir Ficha Oficial UpConta */}
+                      {/* Botones Imprimir Ficha Oficial UpConta (Sin botón de arte alado) */}
                       <div className="flex flex-wrap items-center gap-2 mt-3.5">
                         <button
                           type="button"
@@ -3478,18 +3376,6 @@ export default function App() {
                           <FileText className="w-3.5 h-3.5 text-slate-600" />
                           <span>Imprimir Ficha (Sin Precio)</span>
                         </button>
-                        {getPlanArte(viewedPlanObj.nombre) && (
-                          <button
-                            type="button"
-                            id="btn-descargar-arte"
-                            onClick={() => handleDescargarArte(viewedPlanObj.nombre)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer hover:shadow-md active:scale-95"
-                            title={`Descargar arte visual oficial (${getPlanArte(viewedPlanObj.nombre)?.downloadFileName})`}
-                          >
-                            <Image className="w-3.5 h-3.5" />
-                            <span>Arte</span>
-                          </button>
-                        )}
                         {arteFeedback && (
                           <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
                             <CheckCircle2 className="w-3 h-3 text-emerald-500" />
@@ -3523,6 +3409,58 @@ export default function App() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Previsualización del Arte Oficial tal cual la imagen adjunta */}
+                  {getPlanArte(viewedPlanObj.nombre) && (() => {
+                    const planArte = getPlanArte(viewedPlanObj.nombre)!;
+                    return (
+                      <div className="mt-4 bg-[#FFFDF7] border border-amber-300/80 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-2xs">
+                        <div className="flex items-center gap-3.5 w-full sm:w-auto">
+                          {/* Miniatura cliqueable para previsualizar */}
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImageModal({
+                              url: planArte.imageUrl,
+                              title: `Flyer Publicitario de ${viewedPlanObj.nombre}`,
+                              downloadFileName: planArte.downloadFileName
+                            })}
+                            className="shrink-0 relative group cursor-pointer focus:outline-hidden"
+                            title="Haz clic para previsualizar el flyer en tamaño completo"
+                          >
+                            <img
+                              src={planArte.imageUrl}
+                              alt={`Arte ${viewedPlanObj.nombre}`}
+                              className="w-14 h-18 sm:w-16 sm:h-20 object-contain rounded-xl border-2 border-amber-400 bg-white shadow-2xs group-hover:scale-105 group-hover:shadow-md transition-all"
+                            />
+                            <span className="absolute inset-0 rounded-xl bg-black/0 group-hover:bg-black/15 transition-colors flex items-center justify-center">
+                              <Eye className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 drop-shadow-md transition-opacity" />
+                            </span>
+                          </button>
+
+                          {/* Badge y Título */}
+                          <div className="space-y-1 min-w-0">
+                            <span className="inline-block bg-[#FFB703] text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-md uppercase tracking-wider shadow-2xs">
+                              ARTE COMERCIAL OFICIAL
+                            </span>
+                            <h4 className="text-sm sm:text-base font-black text-slate-900 truncate">
+                              Flyer Publicitario de {viewedPlanObj.nombre}
+                            </h4>
+                          </div>
+                        </div>
+
+                        {/* Botón Descargar Naranja */}
+                        <button
+                          type="button"
+                          onClick={() => handleDescargarArte(viewedPlanObj.nombre)}
+                          className="w-full sm:w-auto bg-[#FF9100] hover:bg-[#F77F00] text-slate-950 font-black text-xs px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-xs hover:shadow-md transition-all cursor-pointer shrink-0 active:scale-95"
+                          title={`Descargar arte visual oficial (${planArte.downloadFileName})`}
+                        >
+                          <Download className="w-4 h-4 text-slate-950" />
+                          <span>Descargar</span>
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Cloud Specific Detailed Specifications Badge Card */}
@@ -3762,6 +3700,15 @@ export default function App() {
         </section>
 
         {/* ==================================== TABS: PLAN END ==================================== */}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ==================================== TABS: BROCHURES OFICIALES ==================================== */}
+        {activeTab === "brochures" && (
+          <div className="space-y-6 animate-fade-in">
+            <BrochuresModule />
           </div>
         )}
 
@@ -4164,19 +4111,28 @@ export default function App() {
                         <div className="flex flex-col items-center gap-1.5 w-full">
                           <img
                             src={customLogo}
-                            alt="Logo personalizado"
+                            alt="Logo activo en simulador"
                             className="max-h-12 max-w-full object-contain rounded"
                           />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCustomLogo("");
-                              setCustomLogoName("");
-                            }}
-                            className="text-[9px] font-bold text-red-600 hover:text-red-750 transition-colors bg-red-50 px-2 py-0.5 rounded cursor-pointer border border-red-200"
-                          >
-                            Quitar Logo
-                          </button>
+                          {isCustomLogoActive ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                Personalizado
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleResetToDefaultLogo}
+                                className="text-[9px] font-bold text-slate-700 hover:text-slate-900 transition-colors bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded cursor-pointer border border-slate-300"
+                                title="Volver al logotipo principal de UpConta"
+                              >
+                                Restablecer UpConta
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[9px] font-extrabold text-[#0B2545] bg-blue-50/80 px-2 py-0.5 rounded border border-blue-200">
+                              Logo Principal UpConta
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <div className="text-center text-[10px] text-slate-500 italic">
@@ -5729,6 +5685,61 @@ export default function App() {
             : "Color de Subtítulos"
         }
       />
+
+      {/* Modal de Previsualización de Arte Oficial */}
+      {previewImageModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setPreviewImageModal(null)}
+        >
+          <div 
+            className="relative max-w-2xl w-full bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Encabezado del modal */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="bg-[#FFB703] text-slate-950 text-[10px] font-black px-2 py-0.5 rounded uppercase shrink-0">
+                  Arte Oficial
+                </span>
+                <h3 className="text-sm font-black text-slate-900 truncate">
+                  {previewImageModal.title}
+                </h3>
+              </div>
+              
+              <div className="flex items-center gap-2 shrink-0">
+                {previewImageModal.downloadFileName && (
+                  <button
+                    type="button"
+                    onClick={() => downloadArteImage(previewImageModal.url, previewImageModal.downloadFileName!)}
+                    className="inline-flex items-center gap-1.5 bg-[#FF9100] hover:bg-[#F77F00] text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-lg shadow-2xs cursor-pointer transition-all active:scale-95"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Descargar</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPreviewImageModal(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                  title="Cerrar vista previa"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Imagen en grande centrada */}
+            <div className="p-4 sm:p-6 bg-slate-100/60 flex items-center justify-center overflow-auto max-h-[78vh]">
+              <img
+                src={previewImageModal.url}
+                alt={previewImageModal.title}
+                className="max-h-[70vh] w-auto max-w-full object-contain rounded-xl shadow-md border border-slate-200 bg-white"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer Branding section */}
       <footer className="max-w-7xl mx-auto px-6 mt-20 pt-8 border-t border-slate-900 text-center text-slate-500 text-xs">

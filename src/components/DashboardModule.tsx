@@ -213,6 +213,9 @@ const getCurrentMonthString = (): string => {
 };
 
 const getMonthDateRange = (monthStr: string) => {
+  if (monthStr === "all_year" || monthStr === "all") {
+    return { start: "2026-01-01", end: "2026-12-31" };
+  }
   const monthNames = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
@@ -299,14 +302,14 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
 
   // Filters State
   const [timeFilter, setTimeFilter] = useState<"total" | "mes" | "mes_anterior" | "ano" | "semana" | "rango">("mes");
-  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthString);
+  const [selectedMonth, setSelectedMonth] = useState<string>("all_year");
   const [selectedWeek, setSelectedWeek] = useState<string>("all");
   const [selectedAdviser, setSelectedAdviser] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>(
     companyMode === "upconta" ? "upconta" : companyMode === "firmas" ? "firmas" : "all"
   );
-  const [startDate, setStartDate] = useState<string>(defaultRange.start);
-  const [endDate, setEndDate] = useState<string>(defaultRange.end);
+  const [startDate, setStartDate] = useState<string>("2026-01-01");
+  const [endDate, setEndDate] = useState<string>("2026-12-31");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Sync category filter if companyMode changes
@@ -334,7 +337,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   }, [selectedMonth]);
 
   // Sub tab view inside dashboard
-  const [activeViewTab, setActiveViewTab] = useState<"overview" | "producto" | "comisiones" | "detalle">("overview");
+  const [activeViewTab, setActiveViewTab] = useState<"overview" | "producto" | "detalle">("overview");
 
   // Dynamic week ranges for selected month
   const dynamicWeekRanges = useMemo(() => {
@@ -348,12 +351,12 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     try {
       let csvText = "";
       
-      // Attempt 1: Local server proxy
+      // Attempt 1: Local server proxy (cache-busted)
       try {
-        const resProxy = await fetch("/api/sheets");
+        const resProxy = await fetch(`/api/sheets?t=${Date.now()}`);
         if (resProxy.ok) {
           const t = await resProxy.text();
-          if (t && !t.trim().startsWith("<")) {
+          if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
             csvText = t;
           }
         }
@@ -364,11 +367,11 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
       // Attempt 2: Direct Google Sheets export URL
       if (!csvText) {
         try {
-          const primaryUrl = "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z5000";
+          const primaryUrl = "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000";
           const res0 = await fetch(primaryUrl);
           if (res0.ok) {
             const t = await res0.text();
-            if (t && !t.trim().startsWith("<")) {
+            if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
               csvText = t;
             }
           }
@@ -377,19 +380,39 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         }
       }
 
-      // Attempt 3: AllOrigins CORS proxy fallback
+      // Attempt 3: Google Visualization API (gviz)
       if (!csvText) {
         try {
-          const corsUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z5000");
-          const resCors = await fetch(corsUrl);
-          if (resCors.ok) {
-            const t = await resCors.text();
-            if (t && !t.trim().startsWith("<")) {
+          const gvizUrl = "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/gviz/tq?tqx=out:csv&gid=0";
+          const resGviz = await fetch(gvizUrl);
+          if (resGviz.ok) {
+            const t = await resGviz.text();
+            if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
               csvText = t;
             }
           }
         } catch (e) {
-          console.warn("CORS proxy fetch failed:", e);
+          console.warn("Gviz fetch skipped/failed:", e);
+        }
+      }
+
+      // Attempt 4: CORS proxy fallbacks
+      if (!csvText) {
+        const proxies = [
+          "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000"),
+          "https://corsproxy.io/?" + encodeURIComponent("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000")
+        ];
+        for (const pUrl of proxies) {
+          try {
+            const resCors = await fetch(pUrl);
+            if (resCors.ok) {
+              const t = await resCors.text();
+              if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
+                csvText = t;
+                break;
+              }
+            }
+          } catch (e) {}
         }
       }
 
@@ -404,13 +427,13 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
       }
 
       // Default fallback to INITIAL_OFFLINE_SALES merged with custom sales
-      const fallbackSlice = INITIAL_OFFLINE_SALES.slice(0, 5000);
+      const fallbackSlice = INITIAL_OFFLINE_SALES.slice(0, 10000);
       const mergedFallback = mergeRemoteSalesWithLocal(fallbackSlice);
       setSales(mergedFallback);
       setSyncStatus("success");
     } catch (error) {
       console.warn("Using offline dataset due to Google Sheets sync error:", error);
-      const fallbackSlice = INITIAL_OFFLINE_SALES.slice(0, 5000);
+      const fallbackSlice = INITIAL_OFFLINE_SALES.slice(0, 10000);
       const mergedFallback = mergeRemoteSalesWithLocal(fallbackSlice);
       setSales(mergedFallback);
       setSyncStatus("error");
@@ -616,7 +639,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     setCompEndDateB(rB.end);
   }, [compMonthA, compMonthB]);
 
-  // 1. Sales dataset strictly for CHARTS and REPORTE COMISIONES (Only affected by MES filter)
+  // 1. Sales dataset strictly for CHARTS and REPORTS (Only affected by MES filter)
   const salesForChartsAndCommissions = useMemo(() => {
     return baseSales.filter(item => {
       // Adviser filter
@@ -681,6 +704,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   // Breakdown metrics for KPI cards (3 rows of 3 matching brand guidelines)
   const totalVentasMonto = useMemo(() => filteredSales.reduce((acc, curr) => acc + (Number(curr.totalSinIva) || (Number(curr.total) ? Number(curr.total) / 1.15 : 0) || 0), 0), [filteredSales]);
   const totalVentasSinIva = totalVentasMonto;
+  const totalVentasConIva = useMemo(() => filteredSales.reduce((acc, curr) => acc + (Number(curr.total) || (Number(curr.totalSinIva) ? Number(curr.totalSinIva) * 1.15 : 0) || 0), 0), [filteredSales]);
   const cantidadVentas = filteredSales.length;
   const ticketPromedio = cantidadVentas > 0 ? totalVentasMonto / cantidadVentas : 0;
 
@@ -694,33 +718,6 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   const totalVentasFirmas = useMemo(() => salesFirmas.reduce((acc, curr) => acc + (Number(curr.totalSinIva) || (Number(curr.total) ? Number(curr.total) / 1.15 : 0) || 0), 0), [salesFirmas]);
   const cantidadFirmas = salesFirmas.length;
   const ticketPromedioFirmas = cantidadFirmas > 0 ? totalVentasFirmas / cantidadFirmas : 0;
-
-  // Dynamic Commission Pool
-  const valorComisionTotal = useMemo(() => {
-    let totalCom = 0;
-    const adviserTotals: Record<string, { upconta: number; firmas: number; total: number }> = {};
-
-    filteredSales.forEach(s => {
-      const val = Number(s.totalSinIva) || (Number(s.total) ? Number(s.total) / 1.15 : 0) || 0;
-      if (!adviserTotals[s.asesor]) adviserTotals[s.asesor] = { upconta: 0, firmas: 0, total: 0 };
-      if (isUpContaSale(s)) {
-        adviserTotals[s.asesor].upconta += val;
-      } else {
-        adviserTotals[s.asesor].firmas += val;
-      }
-      adviserTotals[s.asesor].total += val;
-    });
-
-    Object.values(adviserTotals).forEach(adv => {
-      let comm = 0;
-      if (adv.total >= 5000) comm = adv.total * 0.047;
-      else if (adv.total >= 4000) comm = adv.total * 0.0345;
-      else if (adv.total >= 3000) comm = adv.total * 0.0035;
-      totalCom += comm;
-    });
-
-    return totalCom;
-  }, [filteredSales]);
 
   // Dynamic Chart 1: Adviser Chart (Uses salesForChartsAndCommissions)
   const adviserChartData = useMemo(() => {
@@ -1016,70 +1013,6 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     });
   }, [filteredSales]);
 
-  // Dynamic Table 2: Reporte de Comisiones Table (Uses salesForChartsAndCommissions)
-  const dynamicCommissionsReport = useMemo(() => {
-    const advMap: Record<string, { upconta: number; firmas: number; total: number; comision: number }> = {
-      "Karla Haro": { upconta: 0, firmas: 0, total: 0, comision: 0 },
-      "Ismenia Escalona": { upconta: 0, firmas: 0, total: 0, comision: 0 },
-      "Salomé Estrella": { upconta: 0, firmas: 0, total: 0, comision: 0 },
-      "Evelyn Narváez": { upconta: 0, firmas: 0, total: 0, comision: 0 },
-      "David Santander": { upconta: 0, firmas: 0, total: 0, comision: 0 }
-    };
-
-    salesForChartsAndCommissions.forEach(s => {
-      let matchedKey = "";
-      const advClean = s.asesor.toLowerCase();
-      if (advClean.includes("karla")) matchedKey = "Karla Haro";
-      else if (advClean.includes("ismenia")) matchedKey = "Ismenia Escalona";
-      else if (advClean.includes("salom")) matchedKey = "Salomé Estrella";
-      else if (advClean.includes("evelyn")) matchedKey = "Evelyn Narváez";
-      else if (advClean.includes("david")) matchedKey = "David Santander";
-
-      if (matchedKey) {
-        if (isUpContaSale(s)) {
-          advMap[matchedKey].upconta += s.totalSinIva;
-        } else {
-          advMap[matchedKey].firmas += s.totalSinIva;
-        }
-        advMap[matchedKey].total += s.totalSinIva;
-      }
-    });
-
-    let totalComPool = 0;
-    Object.keys(advMap).forEach(key => {
-      const up = advMap[key].upconta;
-      const fir = advMap[key].firmas;
-      const tot = advMap[key].total;
-      let comm = 0;
-      if (tot >= 6000) {
-        comm = Math.round((up * 0.06 + fir * 0.050755) * 100) / 100;
-      } else if (tot >= 4500) {
-        comm = Math.round((up * 0.05 + fir * 0.038485) * 100) / 100;
-      } else if (tot >= 3500) {
-        comm = Math.round((up * 0.03 + fir * 0.00857) * 100) / 100;
-      } else if (tot >= 3000) {
-        comm = Math.round((up * 0.02 + fir * 0.001145) * 100) / 100;
-      } else {
-        comm = 0;
-      }
-
-      advMap[key].comision = comm;
-      totalComPool += comm;
-    });
-
-    const totalUpconta = Object.values(advMap).reduce((a, b) => a + b.upconta, 0);
-    const totalFirmas = Object.values(advMap).reduce((a, b) => a + b.firmas, 0);
-    const grandTotalSales = Object.values(advMap).reduce((a, b) => a + b.total, 0);
-
-    return {
-      advisers: advMap,
-      totalUpconta,
-      totalFirmas,
-      grandTotalSales,
-      totalComPool
-    };
-  }, [salesForChartsAndCommissions]);
-
   // Formatters
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -1160,10 +1093,13 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
 
       {/* ================= TOP SYNC BAR ================= */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center flex-wrap gap-2.5">
           <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            Sincronizado Google Sheets
+            Google Sheets Sincronizado
+          </span>
+          <span className="text-xs font-extrabold text-slate-700 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+            {sales.length} Ventas Totales en Base de Datos
           </span>
           {lastSyncTime && (
             <span className="text-slate-500 text-xs flex items-center gap-1 font-medium">
@@ -1192,7 +1128,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
           </div>
 
           <div className="text-xs text-slate-500 font-medium">
-            Mostrando <strong className="text-slate-900">{filteredSales.length}</strong> ventas registradas
+            Filtradas: <strong className="text-slate-900">{filteredSales.length}</strong> de <strong className="text-slate-900">{sales.length}</strong> ventas
           </div>
         </div>
 
@@ -1201,24 +1137,24 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-orange-500" />
-              <span>Mes</span>
+              <span>Mes de Análisis</span>
             </label>
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none"
             >
+              <option value="all_year">⭐ Todo el Año / Histórico Completo ({sales.length} ventas)</option>
               {allAvailableMonthsOptions.map((mStr) => {
                 const [mName, year] = mStr.split(" ");
                 const spanishName = MONTH_TRANSLATIONS[mName] || mName;
                 const isCurrent = mStr === currentMonthString;
                 return (
                   <option key={mStr} value={mStr}>
-                    {spanishName} {year} {isCurrent ? "(Actual)" : ""}
+                    {spanishName} {year} {isCurrent ? "(Mes Actual)" : ""}
                   </option>
                 );
               })}
-              <option value="all_year">Todo el Año (2026)</option>
             </select>
           </div>
 
@@ -1360,13 +1296,17 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
           {/* Card 1: Total Ventas */}
           <div className="bg-gradient-to-br from-slate-900 via-[#0B2545] to-slate-900 text-white rounded-2xl p-5 shadow-lg border border-slate-800 relative overflow-hidden group hover:border-orange-500/50 transition-all">
             <div className="flex justify-between items-start">
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <span className="text-[11px] font-extrabold text-orange-400 uppercase tracking-wider flex items-center gap-1">
                   <DollarSign className="w-3.5 h-3.5" />
-                  Total Ventas (Sin IVA)
+                  Total Facturado (Con IVA)
                 </span>
                 <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                  {formatCurrency(totalVentasMonto)}
+                  {formatCurrency(totalVentasConIva)}
+                </div>
+                <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <span className="text-slate-400">Sin IVA:</span>
+                  <span className="text-emerald-400 font-extrabold">{formatCurrency(totalVentasSinIva)}</span>
                 </div>
               </div>
               <div className="p-3 bg-orange-500/20 border border-orange-500/30 rounded-xl text-orange-400">
@@ -1550,18 +1490,6 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         </button>
 
         <button
-          onClick={() => setActiveViewTab("comisiones")}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeViewTab === "comisiones"
-              ? "bg-[#0B2545] text-white shadow-md"
-              : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
-          }`}
-        >
-          <Award className="w-4 h-4 text-amber-400" />
-          <span>Reporte Comisiones ($)</span>
-        </button>
-
-        <button
           onClick={() => setActiveViewTab("detalle")}
           className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
             activeViewTab === "detalle"
@@ -1611,19 +1539,24 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
             </div>
           </div>
 
-          {/* Grid of 2 Charts: Product Distribution & Commission Bar */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Chart 2: Distribución por Producto */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-4">
-              <div className="border-b border-slate-100 pb-3">
+          {/* Reorganized Product Distribution Card (Replaces split comisiones chart) */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
+              <div>
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                   <PieChartIcon className="w-5 h-5 text-emerald-500" />
-                  Participación por Producto ($)
+                  Distribución y Participación por Producto ($ USD)
                 </h3>
-                <p className="text-xs text-slate-500">Monto acumulado por tipo de servicio ofrecido.</p>
+                <p className="text-xs text-slate-500">Monto acumulado y cuota porcentual por cada tipo de servicio comercializado.</p>
               </div>
+              <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+                {productChartData.length} productos con ventas
+              </span>
+            </div>
 
-              <div className="h-64 w-full">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+              {/* Left Column: Pie Chart (5 cols) */}
+              <div className="lg:col-span-5 h-72 w-full flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -1632,7 +1565,9 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
                       nameKey="producto"
                       cx="50%"
                       cy="50%"
-                      outerRadius={85}
+                      innerRadius={55}
+                      outerRadius={95}
+                      paddingAngle={2}
                       label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
                     >
                       {productChartData.map((entry, index) => (
@@ -1644,28 +1579,36 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-            </div>
 
-            {/* Chart 3: Valor a Comisionar por Asesor */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-4">
-              <div className="border-b border-slate-100 pb-3">
-                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-amber-500" />
-                  Comisiones Ganadas por Asesor ($ USD)
-                </h3>
-                <p className="text-xs text-slate-500">Valor a comisionar derivado del volumen de ventas.</p>
-              </div>
+              {/* Right Column: Ranked Product Breakdown List (7 cols) */}
+              <div className="lg:col-span-7 space-y-2.5 overflow-y-auto max-h-72 pr-1">
+                {productChartData.map((prod, idx) => {
+                  const totalSum = productChartData.reduce((acc, p) => acc + p.monto, 0);
+                  const pct = totalSum > 0 ? (prod.monto / totalSum) * 100 : 0;
+                  const color = COLORS[idx % COLORS.length];
 
-              <div className="h-64 w-full pt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={Object.entries(dynamicCommissionsReport.advisers).map(([name, data]) => ({ name, comision: (data as { comision: number }).comision }))} layout="vertical" margin={{ top: 5, right: 30, left: 80, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis type="number" tickFormatter={(v) => `$${v}`} tick={{ fontSize: 11 }} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fontWeight: "bold" }} />
-                    <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
-                    <Bar dataKey="comision" name="Valor a Comisionar ($)" fill="#10B981" radius={[0, 8, 8, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                  return (
+                    <div key={prod.producto} className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="text-xs font-extrabold text-slate-800 truncate">
+                          {prod.producto}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs font-black text-slate-900">
+                          {formatCurrency(prod.monto)}
+                        </span>
+                        <span className="text-[11px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md min-w-[48px] text-right">
+                          {pct.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -2108,94 +2051,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         </div>
       )}
 
-      {/* ================= VIEW 3: REPORTE COMISIONES TABLE ================= */}
-      {activeViewTab === "comisiones" && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-4">
-            <div>
-              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <Award className="w-5 h-5 text-emerald-600" />
-                Reporte de Comisiones Equipo Comercial ($) - Dinámico
-              </h3>
-              <p className="text-xs text-slate-500">
-                Resumen consolidado reactivo que se recalcula dinámicamente según la línea y el período seleccionado.
-              </p>
-            </div>
-            <div className="bg-emerald-50 border border-emerald-300 px-4 py-1.5 rounded-2xl text-emerald-900 text-xs font-black flex items-center gap-2">
-              <Zap className="w-4 h-4 text-emerald-600" />
-              <span>Fondo a Comisionar: <strong>{formatCurrency(dynamicCommissionsReport.totalComPool)} USD</strong></span>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
-            {/* Title Banner */}
-            <div className="bg-[#E65100] text-white font-black text-center text-sm py-2.5 uppercase tracking-wider">
-              REPORTE COMISIONES EQUIPO COMERCIAL
-            </div>
-            <table className="w-full text-xs text-left">
-              <thead className="bg-[#002855] text-white uppercase text-[11px] font-black tracking-wider">
-                <tr>
-                  <th className="p-3 border-r border-slate-700">PRODUCTO</th>
-                  {activeReportAdvisers.map(adv => (
-                    <th key={adv.key} className="p-3 text-right border-r border-slate-700">{adv.name}</th>
-                  ))}
-                  <th className="p-3 text-right bg-[#001D3D] text-amber-300 font-extrabold">TOTAL</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 font-semibold text-slate-800">
-                {(companyMode === "upconta" || companyMode === "all") && (
-                  <tr className="bg-white hover:bg-slate-50">
-                    <td className="p-3 font-extrabold text-slate-900 border-r border-slate-200">
-                      UpConta
-                    </td>
-                    {activeReportAdvisers.map(adv => (
-                      <td key={adv.key} className="p-3 text-right border-r border-slate-200">
-                        {formatCurrency(dynamicCommissionsReport.advisers[adv.name]?.upconta || 0)}
-                      </td>
-                    ))}
-                    <td className="p-3 text-right font-black bg-slate-100 text-slate-900">{formatCurrency(dynamicCommissionsReport.totalUpconta)}</td>
-                  </tr>
-                )}
-                {(companyMode === "firmas" || companyMode === "all") && (
-                  <tr className="bg-slate-50/50 hover:bg-slate-100/50">
-                    <td className="p-3 font-extrabold text-slate-900 border-r border-slate-200">
-                      Firmas
-                    </td>
-                    {activeReportAdvisers.map(adv => (
-                      <td key={adv.key} className="p-3 text-right border-r border-slate-200">
-                        {formatCurrency(dynamicCommissionsReport.advisers[adv.name]?.firmas || 0)}
-                      </td>
-                    ))}
-                    <td className="p-3 text-right font-black bg-slate-100 text-slate-900">{formatCurrency(dynamicCommissionsReport.totalFirmas)}</td>
-                  </tr>
-                )}
-                <tr className="bg-slate-100 font-black text-slate-900 border-t-2 border-slate-300">
-                  <td className="p-3 uppercase border-r border-slate-300">TOTAL</td>
-                  {activeReportAdvisers.map(adv => (
-                    <td key={adv.key} className="p-3 text-right border-r border-slate-300">
-                      {formatCurrency(dynamicCommissionsReport.advisers[adv.name]?.total || 0)}
-                    </td>
-                  ))}
-                  <td className="p-3 text-right bg-slate-200 text-slate-900">{formatCurrency(dynamicCommissionsReport.grandTotalSales)}</td>
-                </tr>
-                <tr className="bg-[#00BCD4]/15 font-black text-cyan-950 text-xs border-t border-cyan-300">
-                  <td className="p-3.5 uppercase border-r border-cyan-200 text-cyan-900">
-                    COMISION
-                  </td>
-                  {activeReportAdvisers.map(adv => (
-                    <td key={adv.key} className="p-3.5 text-right border-r border-cyan-200">
-                      {formatCurrency(dynamicCommissionsReport.advisers[adv.name]?.comision || 0)}
-                    </td>
-                  ))}
-                  <td className="p-3.5 text-right bg-[#00ACC1] text-white font-extrabold">{formatCurrency(dynamicCommissionsReport.totalComPool)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ================= VIEW 4: GRANULAR DETALLE DE VENTAS TABLE ================= */}
+      {/* ================= VIEW 3: GRANULAR DETALLE DE VENTAS TABLE ================= */}
       {activeViewTab === "detalle" && (
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-4">
