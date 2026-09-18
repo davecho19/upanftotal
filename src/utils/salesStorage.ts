@@ -278,7 +278,8 @@ export function calculateCurrentMonthTotals(sales: SaleTransaction[]) {
   for (const s of sales) {
     if (matchMonth(s, currentMonthStr)) {
       const isUp = isUpContaSale(s);
-      const val = Number(s.total) || 0;
+      // Strictly calculate Sin IVA matching DashboardModule exactly
+      const val = Number(s.totalSinIva) || (Number(s.total) ? Number(s.total) / 1.15 : 0) || 0;
       if (isUp) {
         up += val;
         countUp++;

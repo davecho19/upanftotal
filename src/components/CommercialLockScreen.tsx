@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Lock, KeyRound, ArrowRight, AlertTriangle, Building2, FileCheck, Eye, EyeOff, Bell, Sparkles, CheckCircle2, TrendingUp, DollarSign } from "lucide-react";
-import { UpContaLogo, AnfLogo } from "./GodiLogo";
 import {
   SaleTransaction,
   getStoredSales,
@@ -174,6 +173,15 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
 
     loadDashboardSales();
 
+    // Auto-refresh periodically every 60 seconds to keep in sync with Google Sheets
+    const intervalId = setInterval(loadDashboardSales, 60000);
+
+    // Also refresh when tab regains focus
+    const handleFocus = () => {
+      loadDashboardSales();
+    };
+    window.addEventListener("focus", handleFocus);
+
     // Listen for sales updates from other components
     const handleSalesUpdate = () => {
       const stored = getStoredSales();
@@ -191,6 +199,8 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
 
     return () => {
       isMounted = false;
+      clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
       window.removeEventListener("sales_data_updated", handleSalesUpdate);
       window.removeEventListener("storage", handleSalesUpdate);
     };
@@ -213,15 +223,12 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-[#0B2545] to-slate-950 text-white flex flex-col justify-between p-4 sm:p-6 select-none font-sans">
-      {/* Top Bar with Brand Logos */}
+      {/* Top Bar */}
       <header className="max-w-6xl w-full mx-auto flex items-center justify-between py-4 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="bg-white/95 px-3 py-1.5 rounded-xl shadow-md backdrop-blur-md">
-            <UpContaLogo size="sm" />
-          </div>
-          <div className="bg-white/95 px-3 py-1.5 rounded-xl shadow-md backdrop-blur-md">
-            <AnfLogo size="sm" />
-          </div>
+          <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-white drop-shadow-sm">
+            INTRANET UPCONTA Y ANF
+          </h1>
         </div>
 
         <div className="flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-300">
@@ -302,10 +309,10 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
                   </div>
                   <div>
                     <h2 className="text-lg font-black text-white uppercase tracking-wider">
-                      Total Ventas
+                      Total Ventas (Sin IVA)
                     </h2>
                     <p className="text-xs text-emerald-400 font-bold">
-                      Mes Actual ({salesTotals.monthLabel})
+                      Mes Actual ({salesTotals.monthLabel}) • Sin IVA
                     </p>
                   </div>
                 </div>
@@ -316,15 +323,15 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
                 </span>
               </div>
 
-              {/* Data solicitada: Solo total de ventas de UpConta y Firmas del mes actual */}
+              {/* Data solicitada: Solo total de ventas de UpConta y Firmas del mes actual (Sin IVA) */}
               <div className="space-y-3.5">
-                {/* Ventas UpConta (Mes Actual) */}
+                {/* Ventas UpConta (Mes Actual - Sin IVA) */}
                 <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full bg-orange-500 shrink-0"></div>
                     <div>
                       <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
-                        Ventas UpConta
+                        Ventas UpConta (Sin IVA)
                       </span>
                       <span className="text-sm font-semibold text-slate-200">
                         ERP &amp; Facturación
@@ -338,13 +345,13 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
                   </div>
                 </div>
 
-                {/* Ventas Firmas (Mes Actual) */}
+                {/* Ventas Firmas (Mes Actual - Sin IVA) */}
                 <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full bg-amber-400 shrink-0"></div>
                     <div>
                       <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
-                        Ventas Firmas
+                        Ventas Firmas (Sin IVA)
                       </span>
                       <span className="text-sm font-semibold text-slate-200">
                         Firmas Electrónicas ANF
@@ -358,14 +365,14 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
                   </div>
                 </div>
 
-                {/* Gran Total Consolidado (Mes Actual) */}
+                {/* Gran Total Consolidado (Mes Actual - Sin IVA) */}
                 <div className="bg-gradient-to-r from-emerald-950/50 to-slate-950/70 border border-emerald-500/30 rounded-2xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 bg-emerald-500/20 rounded-lg text-emerald-400">
                       <DollarSign className="w-4 h-4" />
                     </div>
                     <span className="text-xs font-black uppercase tracking-wider text-emerald-300">
-                      Total Consolidado
+                      Total Consolidado (Sin IVA)
                     </span>
                   </div>
                   <div className="text-right">
@@ -379,7 +386,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
 
             {/* Pie informativo conciso */}
             <div className="mt-4 pt-3 border-t border-slate-800/80 text-center text-[11px] text-slate-400 font-medium">
-              Ventas acumuladas de {salesTotals.monthLabel}
+              Ventas netas sin IVA acumuladas de {salesTotals.monthLabel}
             </div>
           </div>
 
