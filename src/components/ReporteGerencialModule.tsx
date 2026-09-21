@@ -178,17 +178,20 @@ export function getCurrentWeekForMonth(year: number, month: number): number {
   return 1;
 }
 
-// 8 Etapas Oficiales solicitadas por el usuario:
-// Asignar, interactuar, presentar, reservar, negociar, ganar, perder, pendiente de pago
+// 10 Etapas Oficiales del embudo comercial:
+// 1 LEAD NUEVO, 2 CONTACTADO, 3 CALIFICADO, 4 DEMO AGENDADA, 5 SOLUCION DEFINIDA,
+// 6 PROPUESTA ENVIADA, 7 FACTURA ENVIADA, 8 PENDIENTE DE PAGO, 9 ACTIVADO/GANADO, 10 PERDIDO
 export const ETAPAS_EMBUDO = [
-  { key: "asignar", label: "1. ASIGNAR", enProceso: true },
-  { key: "interactuar", label: "2. INTERACTUAR", enProceso: true },
-  { key: "presentar", label: "3. PRESENTAR", enProceso: true },
-  { key: "reservar", label: "4. RESERVAR", enProceso: true },
-  { key: "negociar", label: "5. NEGOCIAR", enProceso: true },
-  { key: "ganar", label: "6. GANAR", enProceso: false, esGanado: true },
-  { key: "perder", label: "7. PERDER", enProceso: false, esPerdido: true },
-  { key: "pendiente_pago", label: "8. PENDIENTE DE PAGO", enProceso: true }
+  { key: "lead_nuevo", label: "1. LEAD NUEVO", enProceso: true },
+  { key: "contactado", label: "2. CONTACTADO", enProceso: true },
+  { key: "calificado", label: "3. CALIFICADO", enProceso: true },
+  { key: "demo_agendada", label: "4. DEMO AGENDADA", enProceso: true },
+  { key: "solucion_definida", label: "5. SOLUCION DEFINIDA", enProceso: true },
+  { key: "propuesta_enviada", label: "6. PROPUESTA ENVIADA", enProceso: true },
+  { key: "factura_enviada", label: "7. FACTURA ENVIADA", enProceso: true },
+  { key: "pendiente_pago", label: "8. PENDIENTE DE PAGO", enProceso: true },
+  { key: "activado_ganado", label: "9. ACTIVADO/GANADO", enProceso: false, esGanado: true },
+  { key: "perdido", label: "10. PERDIDO", enProceso: false, esPerdido: true }
 ] as const;
 
 export type EtapaKey = typeof ETAPAS_EMBUDO[number]["key"];
@@ -618,7 +621,7 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
 
   // 2. Estado de Embudo de Leads Manual (Matriz: EtapaKey -> VendedorKey -> Cantidad)
   // Iniciado estrictamente en 0 para todos los productos y etapas según requerimiento
-  const storageKeyEmbudo = `reporte_embudo_v2_${empresa}_${anioSeleccionado}_${mesSeleccionado}_sem${semanaSeleccionada}`;
+  const storageKeyEmbudo = `reporte_embudo_v3_${empresa}_${anioSeleccionado}_${mesSeleccionado}_sem${semanaSeleccionada}`;
 
   const getInitialEmbudo = () => {
     const initial: Record<string, Record<string, number>> = {};
@@ -631,28 +634,68 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
     return initial;
   };
 
-  const [embudoData, setEmbudoData] = useState<Record<string, Record<string, number>>>(() => {
+  const loadSavedEmbudo = (key: string) => {
     try {
-      const saved = localStorage.getItem(storageKeyEmbudo);
-      if (saved) return JSON.parse(saved);
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const base = getInitialEmbudo();
+        ETAPAS_EMBUDO.forEach((etapa) => {
+          const stageData = parsed[etapa.key];
+          if (stageData && typeof stageData === "object") {
+            vendedores.forEach((v) => {
+              if (typeof stageData[v.key] === "number") {
+                base[etapa.key][v.key] = stageData[v.key];
+              }
+            });
+          }
+        });
+        return base;
+      }
+      // Chequear migración desde versión anterior si existe
+      const keyV2 = key.replace("_v3_", "_v2_");
+      if (keyV2 !== key) {
+        const savedV2 = localStorage.getItem(keyV2);
+        if (savedV2) {
+          const parsed = JSON.parse(savedV2);
+          const base = getInitialEmbudo();
+          const legacyMap: Record<string, string> = {
+            asignar: "lead_nuevo",
+            interactuar: "contactado",
+            presentar: "demo_agendada",
+            reservar: "solucion_definida",
+            negociar: "propuesta_enviada",
+            pendiente_pago: "pendiente_pago",
+            ganar: "activado_ganado",
+            perder: "perdido"
+          };
+          ETAPAS_EMBUDO.forEach((etapa) => {
+            const oldKey = Object.keys(legacyMap).find((k) => legacyMap[k] === etapa.key);
+            const stageData = parsed[etapa.key] || (oldKey ? parsed[oldKey] : null);
+            if (stageData && typeof stageData === "object") {
+              vendedores.forEach((v) => {
+                if (typeof stageData[v.key] === "number") {
+                  base[etapa.key][v.key] = stageData[v.key];
+                }
+              });
+            }
+          });
+          return base;
+        }
+      }
     } catch (e) {
       console.error(e);
     }
     return getInitialEmbudo();
+  };
+
+  const [embudoData, setEmbudoData] = useState<Record<string, Record<string, number>>>(() => {
+    return loadSavedEmbudo(storageKeyEmbudo);
   });
 
   // Al cambiar período o empresa, cargar datos guardados si existen o reiniciar en 0
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKeyEmbudo);
-      if (saved) {
-        setEmbudoData(JSON.parse(saved));
-      } else {
-        setEmbudoData(getInitialEmbudo());
-      }
-    } catch (e) {
-      setEmbudoData(getInitialEmbudo());
-    }
+    setEmbudoData(loadSavedEmbudo(storageKeyEmbudo));
   }, [storageKeyEmbudo, empresa]);
 
   const handleCellChange = (etapaKey: string, vendedorKey: string, valStr: string) => {
@@ -714,8 +757,8 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
     return (Object.values(totalesPorEtapa) as number[]).reduce((acc: number, val: number) => acc + (Number(val) || 0), 0);
   }, [totalesPorEtapa]);
 
-  const totalCerrados = totalesPorEtapa["ganar"] || 0;
-  const totalPerdidos = totalesPorEtapa["perder"] || 0;
+  const totalCerrados = totalesPorEtapa["activado_ganado"] || totalesPorEtapa["ganar"] || 0;
+  const totalPerdidos = totalesPorEtapa["perdido"] || totalesPorEtapa["perder"] || 0;
   const totalPorCerrar = useMemo(() => {
     return ETAPAS_EMBUDO
       .filter((e) => e.enProceso)
@@ -723,38 +766,33 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
   }, [totalesPorEtapa]);
 
   // 3. Indicadores Comerciales Clave
-  // - MQL: Total de leads recibidos
-  // - SQL: interactuar + presentar + reservar + negociar + pendiente de pago
-  // - Hit Rate: % Ganados sobre Total de Leads (ganar / totalLeads * 100)
-  // - Lost Rate: % Perdidos sobre Total de Leads (perder / totalLeads * 100)
+  // - MQL: Total de leads recibidos (Etapas 1 a 10)
+  // - SQL: Leads en proceso comercial activo (desde 2. CONTACTADO hasta 8. PENDIENTE DE PAGO)
+  // - Hit Rate: % Ganados sobre Total de Leads (activado_ganado / totalLeads * 100)
+  // - Lost Rate: % Perdidos sobre Total de Leads (perdido / totalLeads * 100)
   const calcularMetricasEmbudo = (data: Record<string, Record<string, number>> | null) => {
     if (!data) {
       return { mql: 0, sql: 0, hitRate: 0, lostRate: 0, totalLeads: 0, ganar: 0, perder: 0 };
     }
     let totalLeads = 0;
-    let interactuar = 0;
-    let presentar = 0;
-    let reservar = 0;
-    let negociar = 0;
     let ganar = 0;
     let perder = 0;
-    let pendiente_pago = 0;
+    let sql = 0;
 
     ETAPAS_EMBUDO.forEach((etapa) => {
       const stageObj = data[etapa.key] || {};
       const sumStage = Object.values(stageObj).reduce((acc: number, v: number) => acc + (Number(v) || 0), 0);
       totalLeads += sumStage;
-      if (etapa.key === "interactuar") interactuar += sumStage;
-      else if (etapa.key === "presentar") presentar += sumStage;
-      else if (etapa.key === "reservar") reservar += sumStage;
-      else if (etapa.key === "negociar") negociar += sumStage;
-      else if (etapa.key === "ganar") ganar += sumStage;
-      else if (etapa.key === "perder") perder += sumStage;
-      else if (etapa.key === "pendiente_pago") pendiente_pago += sumStage;
+      if (etapa.key === "activado_ganado") {
+        ganar += sumStage;
+      } else if (etapa.key === "perdido") {
+        perder += sumStage;
+      } else if (etapa.key !== "lead_nuevo") {
+        sql += sumStage;
+      }
     });
 
     const mql = totalLeads;
-    const sql = interactuar + presentar + reservar + negociar + pendiente_pago;
     const hitRate = totalLeads > 0 ? (ganar / totalLeads) * 100 : 0;
     const lostRate = totalLeads > 0 ? (perder / totalLeads) * 100 : 0;
 
@@ -774,13 +812,8 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
       if (String(sem) === String(semanaSeleccionada)) {
         dataSemana = embudoData;
       } else {
-        try {
-          const keySem = `reporte_embudo_v2_${empresa}_${anioSeleccionado}_${mesSeleccionado}_sem${sem}`;
-          const saved = localStorage.getItem(keySem);
-          if (saved) {
-            dataSemana = JSON.parse(saved);
-          }
-        } catch (e) {}
+        const keySem = `reporte_embudo_v3_${empresa}_${anioSeleccionado}_${mesSeleccionado}_sem${sem}`;
+        dataSemana = loadSavedEmbudo(keySem);
       }
 
       const metricas = calcularMetricasEmbudo(dataSemana);
@@ -987,7 +1020,7 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
 
     // ==========================================
     // DIAPOSITIVA 3: CANTIDAD LEADS POR EMBUDO COMERCIAL
-    // (Con las 8 etapas solicitadas: Asignar, interactuar, presentar, reservar, negociar, ganar, perder, pendiente de pago)
+    // (Con las 10 etapas: Lead Nuevo, Contactado, Calificado, Demo Agendada, Solución Definida, Propuesta Enviada, Factura Enviada, Pendiente de Pago, Activado/Ganado, Perdido)
     // ==========================================
     pdf.addPage("a4", "landscape");
     drawDecorations();
@@ -998,38 +1031,40 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
     pdf.text("CANTIDAD LEADS POR EMBUDO COMERCIAL", W / 2, 22, { align: "center" });
 
     // Tabla de Embudo
-    const eStartY = 30;
+    const eStartY = 27;
     const numVends = vendedores.length;
-    const stageColW = 90;
-    const totalColW = 40;
+    const stageColW = 92;
+    const totalColW = 38;
     const vendColW = (W - 40 - stageColW - totalColW) / numVends;
-    const eRowH = 9.5;
+    const eRowH = 8.2;
 
     // Header de Embudo
     pdf.setFillColor(16, 42, 67);
-    pdf.rect(20, eStartY, W - 40, 10, "F");
+    pdf.rect(20, eStartY, W - 40, 9, "F");
 
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
+    pdf.setFontSize(9.5);
     pdf.setTextColor(255, 255, 255);
-    pdf.text("Lead stage (Etapa)", 25, eStartY + 7);
+    pdf.text("Lead stage (Etapa)", 25, eStartY + 6.2);
 
     vendedores.forEach((v, i) => {
       const vx = 20 + stageColW + i * vendColW;
-      pdf.text(v.nombre.split(" ")[0].toUpperCase(), vx + vendColW / 2, eStartY + 7, { align: "center" });
+      pdf.text(v.nombre.split(" ")[0].toUpperCase(), vx + vendColW / 2, eStartY + 6.2, { align: "center" });
     });
 
     const totalX = 20 + stageColW + numVends * vendColW;
-    pdf.text("Total general", totalX + totalColW / 2, eStartY + 7, { align: "center" });
+    pdf.text("Total general", totalX + totalColW / 2, eStartY + 6.2, { align: "center" });
 
-    // Filas de las 8 etapas
+    // Filas de las 10 etapas
     ETAPAS_EMBUDO.forEach((etapa, idx) => {
-      const y = eStartY + 10 + idx * eRowH;
+      const y = eStartY + 9 + idx * eRowH;
+      const isGanar = etapa.key === "activado_ganado";
+      const isPerder = etapa.key === "perdido";
 
       // Estilo especial para Ganar (verde claro) y Perder (rojo claro)
-      if (etapa.key === "ganar") {
+      if (isGanar) {
         pdf.setFillColor(240, 253, 244); // light green
-      } else if (etapa.key === "perder") {
+      } else if (isPerder) {
         pdf.setFillColor(254, 242, 242); // light red
       } else if (idx % 2 === 0) {
         pdf.setFillColor(255, 255, 255);
@@ -1042,50 +1077,50 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
       pdf.setDrawColor(226, 232, 240);
       pdf.line(20, y + eRowH, W - 20, y + eRowH);
 
-      pdf.setFont("helvetica", etapa.key === "ganar" || etapa.key === "perder" ? "bold" : "normal");
-      pdf.setFontSize(9);
-      if (etapa.key === "ganar") {
+      pdf.setFont("helvetica", isGanar || isPerder ? "bold" : "normal");
+      pdf.setFontSize(8.5);
+      if (isGanar) {
         pdf.setTextColor(22, 101, 52); // green 800
-      } else if (etapa.key === "perder") {
+      } else if (isPerder) {
         pdf.setTextColor(153, 27, 27); // red 800
       } else {
         pdf.setTextColor(15, 23, 42);
       }
-      pdf.text(etapa.label, 25, y + 6.5);
+      pdf.text(etapa.label, 25, y + 5.5);
 
       // Valores por vendedor
       vendedores.forEach((v, vi) => {
         const vx = 20 + stageColW + vi * vendColW;
         const val = embudoData[etapa.key]?.[v.key] || 0;
-        pdf.text(`${val}`, vx + vendColW / 2, y + 6.5, { align: "center" });
+        pdf.text(`${val}`, vx + vendColW / 2, y + 5.5, { align: "center" });
       });
 
       // Total fila
       const tRow = totalesPorEtapa[etapa.key] || 0;
       pdf.setFont("helvetica", "bold");
-      pdf.text(`${tRow}`, totalX + totalColW / 2, y + 6.5, { align: "center" });
+      pdf.text(`${tRow}`, totalX + totalColW / 2, y + 5.5, { align: "center" });
     });
 
     // Fila Total General
-    const totalY = eStartY + 10 + 8 * eRowH;
+    const totalY = eStartY + 9 + ETAPAS_EMBUDO.length * eRowH;
     pdf.setFillColor(241, 245, 249);
-    pdf.rect(20, totalY, W - 40, 10, "F");
+    pdf.rect(20, totalY, W - 40, 9, "F");
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
+    pdf.setFontSize(9.5);
     pdf.setTextColor(15, 23, 42);
-    pdf.text("Total general", 25, totalY + 7);
+    pdf.text("Total general", 25, totalY + 6.2);
 
     vendedores.forEach((v, vi) => {
       const vx = 20 + stageColW + vi * vendColW;
       const tVend = totalesPorVendedor[v.key] || 0;
-      pdf.text(`${tVend}`, vx + vendColW / 2, totalY + 7, { align: "center" });
+      pdf.text(`${tVend}`, vx + vendColW / 2, totalY + 6.2, { align: "center" });
     });
-    pdf.text(`${totalGeneralLeads}`, totalX + totalColW / 2, totalY + 7, { align: "center" });
+    pdf.text(`${totalGeneralLeads}`, totalX + totalColW / 2, totalY + 6.2, { align: "center" });
 
     // 4 TARJETAS KPI AL PIE (LEADS, CERRADOS, PERDIDOS, POR CERRAR)
-    const kpiY = 142;
+    const kpiY = totalY + 12;
     const kpiW = (W - 40 - 30) / 4;
-    const kpiH = 30;
+    const kpiH = 28;
 
     const cards = [
       { label: "LEADS", value: totalGeneralLeads, bg: [234, 88, 12] },
@@ -1706,8 +1741,8 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
               </thead>
               <tbody className="text-xs divide-y divide-slate-100 font-medium text-slate-700">
                 {ETAPAS_EMBUDO.map((etapa, idx) => {
-                  const isGanar = etapa.key === "ganar";
-                  const isPerder = etapa.key === "perder";
+                  const isGanar = etapa.key === "activado_ganado";
+                  const isPerder = etapa.key === "perdido";
 
                   return (
                     <tr
@@ -1728,7 +1763,7 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
                         </span>
                         {isGanar && (
                           <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-900 font-black">
-                            Cerrado
+                            Ganado
                           </span>
                         )}
                         {isPerder && (
