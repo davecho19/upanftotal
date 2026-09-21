@@ -225,7 +225,18 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
   const [fecha, setFecha] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [asesor, setAsesor] = useState<string>("");
   const [productoKey, setProductoKey] = useState<string>("");
-  const [tipoVenta, setTipoVenta] = useState<"Nuevo" | "Renovación">("Nuevo");
+  const [tipoVenta, setTipoVenta] = useState<"Nuevo" | "Renovación" | "Upseling">("Nuevo");
+
+  // Upseling solo permitido en el perfil de firmas con clave 1998 o 123456
+  const isFirmasUpselingAllowed =
+    (mode === "firmas" || companyMode === "firmas") &&
+    (accessProfile === "1998" || accessProfile === "123456");
+
+  useEffect(() => {
+    if (!isFirmasUpselingAllowed && tipoVenta === "Upseling") {
+      setTipoVenta("Nuevo");
+    }
+  }, [isFirmasUpselingAllowed, tipoVenta]);
   
   // Selected Plan Index or Value
   const [selectedPlanIndex, setSelectedPlanIndex] = useState<number>(0);
@@ -372,7 +383,7 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
     }
 
     const adicionalesTexto = adicionales.map(a => `${a.nombre} x${a.cantidad}`).join(", ");
-    const finalTipoVenta = showTipoVentaPlan || showTipoVentaAdicionales ? tipoVenta : "";
+    const finalTipoVenta = showTipoVentaPlan || showTipoVentaAdicionales || mode === "firmas" ? tipoVenta : "";
 
     const payload = {
       asesor: ASESORES[asesor] || asesor,
@@ -637,12 +648,12 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
             </div>
 
             {/* Tipo de Venta Radios */}
-            {(showTipoVentaPlan || showTipoVentaAdicionales) && (
+            {(showTipoVentaPlan || showTipoVentaAdicionales || mode === "firmas") && (
               <div className="p-4 bg-orange-50/70 border border-orange-200 rounded-2xl space-y-2">
                 <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
                   Tipo de Venta:
                 </label>
-                <div className="flex items-center gap-6 pt-1">
+                <div className="flex items-center gap-6 pt-1 flex-wrap">
                   <label className="inline-flex items-center gap-2 font-bold text-sm text-slate-800 cursor-pointer">
                     <input
                       type="radio"
@@ -650,7 +661,7 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
                       value="Nuevo"
                       checked={tipoVenta === "Nuevo"}
                       onChange={() => setTipoVenta("Nuevo")}
-                      className="text-orange-600 focus:ring-orange-500 w-4 h-4"
+                      className="text-orange-600 focus:ring-orange-500 w-4 h-4 cursor-pointer"
                     />
                     <span>Nuevo</span>
                   </label>
@@ -661,10 +672,28 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
                       value="Renovación"
                       checked={tipoVenta === "Renovación"}
                       onChange={() => setTipoVenta("Renovación")}
-                      className="text-orange-600 focus:ring-orange-500 w-4 h-4"
+                      className="text-orange-600 focus:ring-orange-500 w-4 h-4 cursor-pointer"
                     />
                     <span>Renovación</span>
                   </label>
+                  {isFirmasUpselingAllowed && (
+                    <label className="inline-flex items-center gap-2 font-bold text-sm text-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="tipoVentaRadio"
+                        value="Upseling"
+                        checked={tipoVenta === "Upseling"}
+                        onChange={() => setTipoVenta("Upseling")}
+                        className="text-orange-600 focus:ring-orange-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span className="flex items-center gap-1.5">
+                        <span>Upseling</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 border border-amber-300">
+                          Firmas
+                        </span>
+                      </span>
+                    </label>
+                  )}
                 </div>
               </div>
             )}
