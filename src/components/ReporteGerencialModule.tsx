@@ -16,7 +16,11 @@ import {
   ShieldCheck, 
   Edit3,
   DollarSign,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Package,
+  Trophy,
+  Award,
+  Hash
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { INITIAL_OFFLINE_SALES } from "../salesData";
@@ -618,6 +622,93 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
 
     return { rows, columnTotals };
   }, [salesDelPeriodo, esUpConta, vendedores]);
+
+  // -------------------------------------------------------------
+  // HOJA: MATRIZ DE CANTIDAD DE VENTAS (UNIDADES) POR PRODUCTO Y ASESOR
+  // Para conocer la cantidad de productos más vendidos
+  // -------------------------------------------------------------
+  const matrixCantidadVentasPorProducto = useMemo(() => {
+    const canonical = esUpConta ? CANONICAL_UPCONTA_PRODUCTS : CANONICAL_FIRMAS_PRODUCTS;
+    const cleanFn = esUpConta ? getCleanUpContaPlan : getCleanFirmasPlan;
+
+    const counts: Record<string, Record<string, number> & { total: number }> = {};
+    canonical.forEach((p) => {
+      counts[p] = { total: 0 };
+      vendedores.forEach((v) => {
+        counts[p][v.key] = 0;
+      });
+    });
+
+    salesDelPeriodo.forEach((s) => {
+      const prodKey = cleanFn(s);
+      if (!counts[prodKey]) {
+        counts[prodKey] = { total: 0 };
+        vendedores.forEach((v) => {
+          counts[prodKey][v.key] = 0;
+        });
+      }
+
+      const advNorm = normalizeAdviser(s.asesor);
+      const matched = vendedores.find((v) => {
+        const vNorm = normalizeAdviser(v.nombre);
+        const vFirstName = vNorm.split(" ")[0];
+        return advNorm.includes(v.key) || advNorm.includes(vFirstName);
+      });
+      const qty = Number((s as any).cantidad) || 1;
+      if (matched) {
+        counts[prodKey][matched.key] = (counts[prodKey][matched.key] || 0) + qty;
+        counts[prodKey].total = (counts[prodKey].total || 0) + qty;
+      }
+    });
+
+    const rows = Object.keys(counts).map((prodKey) => ({
+      producto: prodKey,
+      adviserCounts: counts[prodKey],
+      total: counts[prodKey].total
+    }));
+
+    // Ordenar: productos con mayor CANTIDAD de ventas primero (los más vendidos al inicio)
+    rows.sort((a, b) => {
+      if (b.total !== a.total) return b.total - a.total;
+      return a.producto.localeCompare(b.producto);
+    });
+
+    const columnTotals: Record<string, number> = { total: 0 };
+    vendedores.forEach((v) => {
+      columnTotals[v.key] = rows.reduce((acc, r) => acc + (r.adviserCounts[v.key] || 0), 0);
+      columnTotals.total += columnTotals[v.key];
+    });
+
+    return { rows, columnTotals };
+  }, [salesDelPeriodo, esUpConta, vendedores]);
+
+  // Estadísticas destacadas de volumen de ventas por producto
+  const statsCantidadVentas = useMemo(() => {
+    const rowsWithSales = matrixCantidadVentasPorProducto.rows.filter((r) => r.total > 0);
+    const topProduct = rowsWithSales.length > 0 ? rowsWithSales[0] : null;
+    const runnerUpProduct = rowsWithSales.length > 1 ? rowsWithSales[1] : null;
+    const totalUnidades = matrixCantidadVentasPorProducto.columnTotals.total;
+
+    // Asesor líder en unidades
+    let topAdviserKey = "";
+    let maxAdviserUnits = -1;
+    vendedores.forEach((v) => {
+      const units = matrixCantidadVentasPorProducto.columnTotals[v.key] || 0;
+      if (units > maxAdviserUnits) {
+        maxAdviserUnits = units;
+        topAdviserKey = v.key;
+      }
+    });
+    const topAdviser = vendedores.find((v) => v.key === topAdviserKey);
+
+    return {
+      totalUnidades,
+      topProduct,
+      runnerUpProduct,
+      topAdviser,
+      maxAdviserUnits: Math.max(0, maxAdviserUnits)
+    };
+  }, [matrixCantidadVentasPorProducto, vendedores]);
 
   // 2. Estado de Embudo de Leads Manual (Matriz: EtapaKey -> VendedorKey -> Cantidad)
   // Iniciado estrictamente en 0 para todos los productos y etapas según requerimiento
@@ -1249,6 +1340,132 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
     pdf.setTextColor(255, 255, 255);
     const grandTotalStr = `$ ${mTotals.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     pdf.text(grandTotalStr, totX + totColW / 2, mTotY + mRowH * 0.7, { align: "center" });
+
+    // ==========================================
+    // DIAPOSITIVA: REPORTE DE VENTAS POR CANTIDAD (UNIDADES)
+    // Para conocer la cantidad de productos más vendidos
+    // ==========================================
+    if (esUpConta) {
+      pdf.addPage("a4", "landscape");
+      drawDecorations();
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(22);
+      pdf.setTextColor(11, 37, 69);
+      pdf.text("REPORTE DE VENTAS POR CANTIDAD", W / 2, 22, { align: "center" });
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(`Ranking y cantidad de productos más vendidos por asesor | Período: ${periodoTexto}`, W / 2, 28, { align: "center" });
+
+      const qRows = matrixCantidadVentasPorProducto.rows;
+      const qTotals = matrixCantidadVentasPorProducto.columnTotals;
+      const qNumAdv = vendedores.length;
+      const qRankColW = 16;
+      const qProdColW = 94;
+      const qAdvColW = 42;
+      const qTotColW = 36;
+      const qPctColW = 28;
+      const qTotalTableW = qRankColW + qProdColW + qNumAdv * qAdvColW + qTotColW + qPctColW;
+      const qTableStartX = (W - qTotalTableW) / 2;
+      const qTableStartY = 35;
+
+      const qAvailableHeight = 150;
+      const qRowH = Math.min(8.0, Math.max(5.6, qAvailableHeight / (qRows.length + 2)));
+
+      // Header row
+      pdf.setFillColor(16, 42, 67);
+      pdf.rect(qTableStartX, qTableStartY, qTotalTableW, qRowH + 1.5, "F");
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("#", qTableStartX + qRankColW / 2, qTableStartY + qRowH * 0.7, { align: "center" });
+      pdf.text("TIPO DE PRODUCTO / PLAN", qTableStartX + qRankColW + 5, qTableStartY + qRowH * 0.7);
+
+      vendedores.forEach((v, vi) => {
+        const vx = qTableStartX + qRankColW + qProdColW + vi * qAdvColW;
+        pdf.text(v.nombre.split(" ")[0].toUpperCase(), vx + qAdvColW / 2, qTableStartY + qRowH * 0.7, { align: "center" });
+      });
+
+      const qTotX = qTableStartX + qRankColW + qProdColW + qNumAdv * qAdvColW;
+      pdf.text("CANTIDAD", qTotX + qTotColW / 2, qTableStartY + qRowH * 0.7, { align: "center" });
+
+      const qPctX = qTotX + qTotColW;
+      pdf.text("% SHARE", qPctX + qPctColW / 2, qTableStartY + qRowH * 0.7, { align: "center" });
+
+      // Rows
+      qRows.forEach((r, ri) => {
+        const y = qTableStartY + qRowH + 1.5 + ri * qRowH;
+        if (ri === 0 && r.total > 0) {
+          pdf.setFillColor(254, 243, 199); // Top 1 highlight
+        } else if (ri % 2 === 0) {
+          pdf.setFillColor(255, 255, 255);
+        } else {
+          pdf.setFillColor(248, 250, 252);
+        }
+        pdf.rect(qTableStartX, y, qTotalTableW, qRowH, "F");
+
+        pdf.setDrawColor(226, 232, 240);
+        pdf.line(qTableStartX, y + qRowH, qTableStartX + qTotalTableW, y + qRowH);
+
+        // Rank
+        pdf.setFont("helvetica", r.total > 0 ? "bold" : "normal");
+        pdf.setFontSize(qRowH < 7 ? 7.5 : 8.5);
+        pdf.setTextColor(15, 23, 42);
+        const rankStr = ri === 0 && r.total > 0 ? "#1" : `${ri + 1}`;
+        pdf.text(rankStr, qTableStartX + qRankColW / 2, y + qRowH * 0.7, { align: "center" });
+
+        // Product name
+        pdf.text(r.producto, qTableStartX + qRankColW + 5, y + qRowH * 0.7);
+
+        // Adviser counts
+        vendedores.forEach((v, vi) => {
+          const vx = qTableStartX + qRankColW + qProdColW + vi * qAdvColW;
+          const val = r.adviserCounts[v.key] || 0;
+          pdf.setFont("helvetica", val > 0 ? "bold" : "normal");
+          if (val > 0) {
+            pdf.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+          } else {
+            pdf.setTextColor(148, 163, 184);
+          }
+          pdf.text(`${val}`, vx + qAdvColW / 2, y + qRowH * 0.7, { align: "center" });
+        });
+
+        // Total
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(`${r.total}`, qTotX + qTotColW / 2, y + qRowH * 0.7, { align: "center" });
+
+        // % Share
+        const pctVal = qTotals.total > 0 ? ((r.total / qTotals.total) * 100).toFixed(1) + "%" : "0.0%";
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(pctVal, qPctX + qPctColW / 2, y + qRowH * 0.7, { align: "center" });
+      });
+
+      // Total row
+      const qTotY = qTableStartY + qRowH + 1.5 + qRows.length * qRowH;
+      pdf.setFillColor(11, 37, 69);
+      pdf.rect(qTableStartX, qTotY, qTotalTableW, qRowH + 1.5, "F");
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("TOTAL GENERAL (UNIDADES)", qTableStartX + qRankColW + 5, qTotY + qRowH * 0.7);
+
+      vendedores.forEach((v, vi) => {
+        const vx = qTableStartX + qRankColW + qProdColW + vi * qAdvColW;
+        const val = qTotals[v.key] || 0;
+        pdf.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+        pdf.text(`${val}`, vx + qAdvColW / 2, qTotY + qRowH * 0.7, { align: "center" });
+      });
+
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(`${qTotals.total}`, qTotX + qTotColW / 2, qTotY + qRowH * 0.7, { align: "center" });
+      pdf.text("100%", qPctX + qPctColW / 2, qTotY + qRowH * 0.7, { align: "center" });
+    }
 
     // ==========================================
     // DIAPOSITIVA 5: INDICADORES COMERCIALES CLAVE (AL FINAL)
@@ -2003,6 +2220,315 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
         <div className={`h-1 ${theme.accentBg} mx-4`}></div>
         <div className="h-1.5 bg-[#0B2545] w-full"></div>
       </div>
+
+      {/* -------------------- REPORTE DE VENTAS POR CANTIDAD (UNIDADES) -------------------- */}
+      {esUpConta && (
+        <div className="bg-white rounded-2xl border border-slate-300 shadow-md overflow-hidden relative">
+          <div className="h-1.5 bg-[#0B2545] w-full"></div>
+          <div className={`h-1 ${theme.accentBg} mx-4`}></div>
+
+          <div className="p-6 sm:p-10 space-y-6">
+            {/* Header de la Diapositiva: Reporte de Ventas por Cantidad */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${theme.accentBadgeBg} ${theme.accentBadgeText} border ${theme.accentLightBorder}`}>
+                    Análisis de Volumen Comercial
+                  </span>
+                  <span className="text-xs text-slate-500 font-bold">
+                    Ranking de Demanda
+                  </span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5 mt-1">
+                  <Package className={`w-6 h-6 ${theme.accentText}`} />
+                  <span>REPORTE DE VENTAS POR CANTIDAD</span>
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+                  Ranking y desglose de cantidad de unidades vendidas por producto y asesor para conocer los productos más vendidos | Período: <span className="font-bold text-slate-800">{periodoTexto}</span>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                  Total Unidades Vendidas:{" "}
+                  <span className={`${theme.accentText} font-black ml-1 font-mono text-sm`}>
+                    {matrixCantidadVentasPorProducto.columnTotals.total} unid.
+                  </span>
+                </span>
+                {statsCantidadVentas.topProduct && statsCantidadVentas.topProduct.total > 0 && (
+                  <span className="text-xs font-bold text-amber-900 bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-300 flex items-center gap-1.5">
+                    <Trophy className="w-3.5 h-3.5 text-amber-600" />
+                    <span>#1 Más Vendido: <strong>{statsCantidadVentas.topProduct.producto}</strong> ({statsCantidadVentas.topProduct.total} unid.)</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* 4 Mini Cards KPI de Volumen y Top Sellers */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                  Total Unidades Vendidas
+                </span>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-slate-900 font-mono">
+                    {matrixCantidadVentasPorProducto.columnTotals.total}
+                  </span>
+                  <span className="text-xs text-slate-500 font-bold">unidades</span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-medium mt-1">
+                  Volumen total en {periodoTexto}
+                </span>
+              </div>
+
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-3.5 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-800">
+                    🥇 Top #1 Más Vendido
+                  </span>
+                  <Trophy className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="mt-1">
+                  <span className="text-sm font-black text-slate-900 block truncate" title={statsCantidadVentas.topProduct?.producto || "Sin ventas"}>
+                    {statsCantidadVentas.topProduct?.producto || "Sin ventas"}
+                  </span>
+                  <span className="text-xs font-black text-orange-600 font-mono">
+                    {statsCantidadVentas.topProduct ? `${statsCantidadVentas.topProduct.total} unidades` : "0 unidades"}
+                  </span>
+                </div>
+                <span className="text-[10px] text-amber-700/80 font-bold mt-1">
+                  {statsCantidadVentas.topProduct && matrixCantidadVentasPorProducto.columnTotals.total > 0
+                    ? `${((statsCantidadVentas.topProduct.total / matrixCantidadVentasPorProducto.columnTotals.total) * 100).toFixed(1)}% del volumen total`
+                    : "0% cuota"}
+                </span>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
+                    🥈 Top #2 Más Vendido
+                  </span>
+                  <Award className="w-4 h-4 text-slate-500" />
+                </div>
+                <div className="mt-1">
+                  <span className="text-sm font-black text-slate-800 block truncate" title={statsCantidadVentas.runnerUpProduct?.producto || "N/A"}>
+                    {statsCantidadVentas.runnerUpProduct?.producto || "Sin ventas secundarias"}
+                  </span>
+                  <span className="text-xs font-bold text-slate-700 font-mono">
+                    {statsCantidadVentas.runnerUpProduct ? `${statsCantidadVentas.runnerUpProduct.total} unidades` : "0 unidades"}
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-medium mt-1">
+                  {statsCantidadVentas.runnerUpProduct && matrixCantidadVentasPorProducto.columnTotals.total > 0
+                    ? `${((statsCantidadVentas.runnerUpProduct.total / matrixCantidadVentasPorProducto.columnTotals.total) * 100).toFixed(1)}% del volumen total`
+                    : "-"}
+                </span>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
+                    Asesor Líder en Unidades
+                  </span>
+                  <Users className="w-4 h-4 text-slate-500" />
+                </div>
+                <div className="mt-1">
+                  <span className="text-sm font-black text-slate-800 block">
+                    {statsCantidadVentas.topAdviser?.nombre.split(" ")[0] || "-"}
+                  </span>
+                  <span className="text-xs font-bold text-emerald-700 font-mono">
+                    {statsCantidadVentas.maxAdviserUnits > 0 ? `${statsCantidadVentas.maxAdviserUnits} unidades` : "0 unidades"}
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-medium mt-1">
+                  Mayor colocación de productos
+                </span>
+              </div>
+            </div>
+
+            {/* Matriz: Filas = Producto/Plan (Ordenados de más a menos vendido), Columnas = Vendedores, Total Cantidad, % Share */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-[#102A43] text-white">
+                      <th className="py-3 px-3 font-black uppercase tracking-wider text-center w-12 text-xs">
+                        #
+                      </th>
+                      <th className="py-3 px-4 font-black uppercase tracking-wider text-xs">
+                        TIPO DE PRODUCTO / PLAN
+                      </th>
+                      {vendedores.map((v) => (
+                        <th
+                          key={v.key}
+                          className="py-3 px-4 font-black uppercase tracking-wider text-xs text-center border-l border-slate-700"
+                        >
+                          <div className="font-bold">{v.nombre.split(" ")[0]}</div>
+                          <div className={`text-[10px] ${esUpConta ? "text-orange-300" : "text-amber-300"} font-normal`}>{v.rol}</div>
+                        </th>
+                      ))}
+                      <th className="py-3 px-4 font-black uppercase tracking-wider text-xs text-center border-l border-slate-700 bg-[#0B2545]">
+                        TOTAL CANTIDAD
+                      </th>
+                      <th className="py-3 px-4 font-black uppercase tracking-wider text-xs text-center border-l border-slate-700 w-36">
+                        % PARTICIPACIÓN
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {matrixCantidadVentasPorProducto.rows.map((row, idx) => {
+                      const tieneVentas = row.total > 0;
+                      const esTop1 = idx === 0 && tieneVentas;
+                      const esTop2 = idx === 1 && tieneVentas;
+                      const esTop3 = idx === 2 && tieneVentas;
+                      const grandTotal = matrixCantidadVentasPorProducto.columnTotals.total;
+                      const pct = grandTotal > 0 ? (row.total / grandTotal) * 100 : 0;
+
+                      return (
+                        <tr
+                          key={row.producto}
+                          className={`transition-colors ${
+                            esTop1
+                              ? "bg-amber-50/70 hover:bg-amber-100/60"
+                              : idx % 2 === 0
+                              ? "bg-white hover:bg-slate-100/60"
+                              : "bg-slate-50/70 hover:bg-slate-100/60"
+                          }`}
+                        >
+                          {/* Columna Ranking */}
+                          <td className="py-2.5 px-3 text-center font-bold">
+                            {esTop1 ? (
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-400 text-slate-950 text-xs font-black shadow-xs">
+                                🥇
+                              </span>
+                            ) : esTop2 ? (
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-800 text-xs font-black">
+                                🥈
+                              </span>
+                            ) : esTop3 ? (
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-200 text-orange-950 text-xs font-black">
+                                🥉
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-xs font-mono font-medium">
+                                #{idx + 1}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Nombre de Producto */}
+                          <td className="py-2.5 px-4 font-semibold text-slate-800 flex items-center gap-2">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                tieneVentas ? "bg-orange-500" : "bg-slate-300"
+                              }`}
+                            ></span>
+                            <span className={tieneVentas ? "font-bold text-slate-900" : "text-slate-600"}>
+                              {row.producto}
+                            </span>
+                            {esTop1 && (
+                              <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-black uppercase tracking-wider ml-1">
+                                Más Vendido
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Columnas por Asesor */}
+                          {vendedores.map((v) => {
+                            const val = row.adviserCounts[v.key] || 0;
+                            return (
+                              <td
+                                key={v.key}
+                                className="py-2.5 px-4 text-center border-l border-slate-100 font-mono text-xs"
+                              >
+                                {val > 0 ? (
+                                  <span className={`inline-block px-2.5 py-0.5 rounded-md ${theme.accentBadgeBg} ${theme.accentBadgeText} font-black border ${theme.accentLightBorder}`}>
+                                    {val}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 font-normal">0</span>
+                                )}
+                              </td>
+                            );
+                          })}
+
+                          {/* Total Cantidad Producto */}
+                          <td className="py-2.5 px-4 text-center border-l border-slate-100 font-mono font-black text-slate-900 bg-slate-50/50">
+                            {row.total > 0 ? (
+                              <span className="text-slate-900 font-black text-sm px-2.5 py-0.5 rounded-md bg-slate-200/70">
+                                {row.total}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 font-normal">0</span>
+                            )}
+                          </td>
+
+                          {/* % Participación con barra */}
+                          <td className="py-2.5 px-4 text-center border-l border-slate-100 font-mono">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full ${
+                                    esTop1 ? "bg-amber-500" : tieneVentas ? theme.accentBg : "bg-transparent"
+                                  } rounded-full transition-all`}
+                                  style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                                ></div>
+                              </div>
+                              <span className={`text-[11px] font-bold w-12 text-right ${tieneVentas ? "text-slate-800" : "text-slate-400"}`}>
+                                {pct.toFixed(1)}%
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {/* Fila Total General */}
+                    <tr className="bg-[#0B2545] text-white font-black">
+                      <td className="py-3 px-3 text-center font-black tracking-wider text-xs">
+                        Σ
+                      </td>
+                      <td className="py-3 px-4 font-black tracking-wider text-xs">
+                        TOTAL GENERAL (UNIDADES)
+                      </td>
+                      {vendedores.map((v) => (
+                        <td
+                          key={v.key}
+                          className="py-3 px-4 text-center border-l border-slate-700 font-mono text-xs text-white"
+                        >
+                          <span className={`${theme.accentText} font-black`}>
+                            {matrixCantidadVentasPorProducto.columnTotals[v.key] || 0}
+                          </span>
+                        </td>
+                      ))}
+                      <td className={`py-3 px-4 text-center border-l border-slate-700 font-mono text-sm ${theme.bannerValText} bg-[#071a33]`}>
+                        {matrixCantidadVentasPorProducto.columnTotals.total}
+                      </td>
+                      <td className="py-3 px-4 text-center border-l border-slate-700 font-mono text-xs text-slate-300">
+                        100.0%
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Nota de pie */}
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-100">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                Matriz de cantidad de productos vendida calculada en tiempo real. Ordenada automáticamente de mayor a menor cantidad para conocer los productos más vendidos.
+              </span>
+              <span className="font-bold text-slate-600">
+                {esUpConta ? "Asesores: Karla Haro y David Santander" : "Equipo Comercial"}
+              </span>
+            </div>
+          </div>
+
+          <div className={`h-1 ${theme.accentBg} mx-4`}></div>
+          <div className="h-1.5 bg-[#0B2545] w-full"></div>
+        </div>
+      )}
 
       {/* -------------------- DIAPOSITIVA 5: INDICADORES COMERCIALES CLAVE -------------------- */}
       <div className="bg-white rounded-2xl border border-slate-300 shadow-md overflow-hidden relative">

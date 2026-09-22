@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Lock, KeyRound, ArrowRight, AlertTriangle, Building2, FileCheck, Eye, EyeOff, Bell, Sparkles, CheckCircle2, TrendingUp, DollarSign } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Lock, KeyRound, ArrowRight, AlertTriangle, Building2, FileCheck, Eye, EyeOff, Bell, Sparkles, CheckCircle2, TrendingUp, DollarSign, Trophy, Award } from "lucide-react";
 import {
   SaleTransaction,
   getStoredSales,
@@ -7,8 +7,34 @@ import {
   normalizeDateString,
   getMonthFromDate,
   calculateCurrentMonthTotals,
-  getSpanishCurrentMonthLabel
+  getSpanishCurrentMonthLabel,
+  getCurrentMonthString,
+  matchMonth,
+  isUpContaSale
 } from "../utils/salesStorage";
+
+// Helper functions to get canonical clean product and plan names
+function getCleanUpContaPlan(s: SaleTransaction): string {
+  let plan = s.plan || s.producto || "Otros";
+  plan = plan.replace(/\s*\(\$[\d,\.]+\)/g, "").trim();
+  if (s.producto === "Plan Contador" && !plan.toLowerCase().includes("contador")) {
+    return `Plan Contador - ${plan}`;
+  }
+  if (plan.toUpperCase().includes("START") || plan.toUpperCase().includes("STAR")) {
+    return "ERP UPCONTA START (ERP STAR)";
+  }
+  return plan.toUpperCase();
+}
+
+function getCleanFirmasPlan(s: SaleTransaction): string {
+  const prod = s.producto || "Firma Natural";
+  let plan = s.plan || "";
+  plan = plan.replace(/\s*\(\$[\d,\.]+\)/g, "").trim();
+  if (plan) {
+    return `${prod} - ${plan}`;
+  }
+  return prod;
+}
 
 interface CommercialLockScreenProps {
   onUnlock: (code: string) => boolean;
@@ -20,8 +46,11 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Raw sales transactions for calculating top products
+  const [salesTransactions, setSalesTransactions] = useState<SaleTransaction[]>(() => getStoredSales());
+
   // Calculate initial totals strictly for the current month from stored sales
-  const initialCurrentMonth = calculateCurrentMonthTotals(getStoredSales());
+  const initialCurrentMonth = calculateCurrentMonthTotals(salesTransactions);
 
   const [salesTotals, setSalesTotals] = useState<{
     upconta: number;
@@ -34,6 +63,48 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
     total: initialCurrentMonth.total,
     monthLabel: initialCurrentMonth.monthLabel || getSpanishCurrentMonthLabel()
   });
+
+  // Top 5 Productos más vendidos en Firmas y Sistemas (Mes Vigente)
+  const topProductsCurrentMonth = useMemo(() => {
+    const currentMonthStr = getCurrentMonthString();
+    const countFirmas: Record<string, number> = {};
+    const countSistemas: Record<string, number> = {};
+    let totalUnidadesFirmas = 0;
+    let totalUnidadesSistemas = 0;
+
+    salesTransactions.forEach((s) => {
+      if (matchMonth(s, currentMonthStr)) {
+        const isUp = isUpContaSale(s);
+        const qty = Number((s as any).cantidad) || 1;
+        if (isUp) {
+          const key = getCleanUpContaPlan(s);
+          countSistemas[key] = (countSistemas[key] || 0) + qty;
+          totalUnidadesSistemas += qty;
+        } else {
+          const key = getCleanFirmasPlan(s);
+          countFirmas[key] = (countFirmas[key] || 0) + qty;
+          totalUnidadesFirmas += qty;
+        }
+      }
+    });
+
+    const topFirmas = Object.entries(countFirmas)
+      .map(([name, cantidad]) => ({ name, cantidad }))
+      .sort((a, b) => b.cantidad - a.cantidad)
+      .slice(0, 5);
+
+    const topSistemas = Object.entries(countSistemas)
+      .map(([name, cantidad]) => ({ name, cantidad }))
+      .sort((a, b) => b.cantidad - a.cantidad)
+      .slice(0, 5);
+
+    return {
+      topFirmas,
+      topSistemas,
+      totalUnidadesFirmas,
+      totalUnidadesSistemas
+    };
+  }, [salesTransactions]);
 
   // Helper parser for Google Sheets CSV matching DashboardModule
   const parseCSVToTransactions = (text: string): SaleTransaction[] => {
@@ -144,6 +215,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
             const merged = mergeRemoteSalesWithLocal(parsed);
             const currentMonthTotals = calculateCurrentMonthTotals(merged);
             if (isMounted) {
+              setSalesTransactions(merged);
               setSalesTotals({
                 upconta: currentMonthTotals.upconta,
                 firmas: currentMonthTotals.firmas,
@@ -159,6 +231,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
         const stored = getStoredSales();
         const currentTotals = calculateCurrentMonthTotals(stored);
         if (isMounted) {
+          setSalesTransactions(stored);
           setSalesTotals({
             upconta: currentTotals.upconta,
             firmas: currentTotals.firmas,
@@ -186,6 +259,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
     const handleSalesUpdate = () => {
       const stored = getStoredSales();
       const currentTotals = calculateCurrentMonthTotals(stored);
+      setSalesTransactions(stored);
       setSalesTotals({
         upconta: currentTotals.upconta,
         firmas: currentTotals.firmas,
@@ -240,56 +314,223 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
       {/* Main Container */}
       <main className="max-w-6xl w-full mx-auto my-6 sm:my-8 space-y-6">
         
-        {/* 1. Recuadro de Noticias y Novedades - Ancho Completo */}
-        <div className="w-full bg-slate-900/90 border border-amber-500/40 rounded-3xl shadow-2xl p-6 sm:p-7 backdrop-blur-xl relative overflow-hidden">
+        {/* 1. TOP 5 PRODUCTOS MÁS VENDIDOS (FIRMAS & SISTEMAS) - MES VIGENTE */}
+        <div className="w-full bg-slate-900/90 border border-slate-700/80 rounded-3xl shadow-2xl p-6 sm:p-7 backdrop-blur-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-400"></div>
-          
-          <div className="flex items-start gap-4">
-            <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5 shadow-sm">
-              <Bell className="w-6 h-6 text-amber-400 animate-bounce" />
+
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 shadow-sm">
+                  <Trophy className="w-6 h-6 text-amber-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      Ranking de Demanda Comercial
+                    </span>
+                    <span className="text-xs text-slate-400 font-semibold">
+                      Mes Vigente: <strong className="text-amber-300">{salesTotals.monthLabel}</strong>
+                    </span>
+                  </div>
+                  <h2 className="text-lg sm:text-xl font-black text-white tracking-tight mt-1">
+                    Top 5 Productos Más Vendidos en Firmas &amp; Sistemas
+                  </h2>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-400 self-start sm:self-auto">
+                <span className="px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800 text-slate-300 flex items-center gap-1.5">
+                  <FileCheck className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Firmas: <strong className="text-amber-300 font-mono">{topProductsCurrentMonth.totalUnidadesFirmas}</strong> unid.</span>
+                </span>
+                <span className="px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800 text-slate-300 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-orange-400" />
+                  <span>Sistemas: <strong className="text-orange-300 font-mono">{topProductsCurrentMonth.totalUnidadesSistemas}</strong> unid.</span>
+                </span>
+              </div>
             </div>
-            
-            <div className="space-y-4 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 bg-amber-500/25 text-amber-300 border border-amber-500/50 text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-xs">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  Noticias &amp; Novedades
-                </span>
-                <span className="text-sm font-extrabold text-slate-100">
-                  Plataforma Comercial UpConta &amp; ANF
-                </span>
+
+            {/* Grid de 2 Columnas: Firmas Electrónicas vs Sistemas UpConta */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              
+              {/* Columna 1: Top 5 Firmas Electrónicas */}
+              <div className="bg-slate-950/60 border border-amber-500/20 rounded-2xl p-4 sm:p-5 flex flex-col justify-between relative overflow-hidden">
+                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-3.5">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      <FileCheck className="w-4 h-4 text-amber-400" />
+                    </span>
+                    <div>
+                      <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                        <span>Top 5 en Firmas Electrónicas</span>
+                        <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/30">ANF AC</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400">Certificados y firmas digitales del mes</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black text-amber-300 font-mono bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+                    {topProductsCurrentMonth.totalUnidadesFirmas} Total
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 flex-1">
+                  {topProductsCurrentMonth.topFirmas.length === 0 ? (
+                    <div className="text-center py-6 text-slate-500 text-xs font-medium">
+                      No hay ventas de firmas registradas en {salesTotals.monthLabel}
+                    </div>
+                  ) : (
+                    topProductsCurrentMonth.topFirmas.map((item, idx) => {
+                      const maxQty = topProductsCurrentMonth.topFirmas[0]?.cantidad || 1;
+                      const pctOfMax = (item.cantidad / maxQty) * 100;
+                      const pctOfTotal = topProductsCurrentMonth.totalUnidadesFirmas > 0
+                        ? ((item.cantidad / topProductsCurrentMonth.totalUnidadesFirmas) * 100).toFixed(1)
+                        : "0";
+
+                      return (
+                        <div
+                          key={item.name}
+                          className="bg-slate-900/80 border border-slate-800/90 hover:border-amber-500/40 rounded-xl p-2.5 sm:px-3 sm:py-2.5 transition-all relative overflow-hidden group"
+                        >
+                          <div
+                            className="absolute left-0 top-0 bottom-0 bg-amber-500/10 transition-all pointer-events-none"
+                            style={{ width: `${pctOfMax}%` }}
+                          ></div>
+
+                          <div className="relative flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span
+                                className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${
+                                  idx === 0
+                                    ? "bg-amber-400 text-slate-950 shadow-sm ring-2 ring-amber-400/40 font-black"
+                                    : idx === 1
+                                    ? "bg-slate-300 text-slate-950 font-bold"
+                                    : idx === 2
+                                    ? "bg-amber-700/80 text-amber-100 font-bold"
+                                    : "bg-slate-800 text-slate-400 font-semibold text-[11px]"
+                                }`}
+                              >
+                                {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
+                              </span>
+
+                              <div className="min-w-0">
+                                <p className="text-xs sm:text-sm font-bold text-slate-100 truncate group-hover:text-amber-300 transition-colors">
+                                  {item.name}
+                                </p>
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  {pctOfTotal}% de las firmas del mes
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <span className="text-xs sm:text-sm font-black text-amber-300 font-mono bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 rounded-lg">
+                                {item.cantidad} <span className="text-[10px] font-bold text-amber-200/80">unid.</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
 
-              {/* Noticias en cuadrícula responsiva para aprovechar todo el ancho */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-sm text-slate-200 font-medium">
-                <div className="flex items-start gap-2.5 bg-slate-950/40 border border-slate-800/70 p-3 rounded-2xl">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">
-                    <strong className="text-amber-300">Brochures Oficiales:</strong> Se cargaron los brochures de cada plan (Facturación, ERP, Contadores y Socios) con descarga de PDFs oficiales.
+              {/* Columna 2: Top 5 Sistemas UpConta */}
+              <div className="bg-slate-950/60 border border-orange-500/20 rounded-2xl p-4 sm:p-5 flex flex-col justify-between relative overflow-hidden">
+                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-3.5">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                      <Building2 className="w-4 h-4 text-orange-400" />
+                    </span>
+                    <div>
+                      <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                        <span>Top 5 en Sistemas &amp; Planes ERP</span>
+                        <span className="text-[10px] font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/30">UpConta</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400">Facturación electrónica y software contable</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black text-orange-300 font-mono bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-lg">
+                    {topProductsCurrentMonth.totalUnidadesSistemas} Total
                   </span>
                 </div>
 
-                <div className="flex items-start gap-2.5 bg-slate-950/40 border border-slate-800/70 p-3 rounded-2xl">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">
-                    <strong className="text-emerald-300">Artes Visuales:</strong> Se integraron las artes oficiales en la sección de planes para Facturación, ERP y Contadores.
-                  </span>
-                </div>
+                <div className="space-y-2.5 flex-1">
+                  {topProductsCurrentMonth.topSistemas.length === 0 ? (
+                    <div className="text-center py-6 text-slate-500 text-xs font-medium">
+                      No hay ventas de sistemas registradas en {salesTotals.monthLabel}
+                    </div>
+                  ) : (
+                    topProductsCurrentMonth.topSistemas.map((item, idx) => {
+                      const maxQty = topProductsCurrentMonth.topSistemas[0]?.cantidad || 1;
+                      const pctOfMax = (item.cantidad / maxQty) * 100;
+                      const pctOfTotal = topProductsCurrentMonth.totalUnidadesSistemas > 0
+                        ? ((item.cantidad / topProductsCurrentMonth.totalUnidadesSistemas) * 100).toFixed(1)
+                        : "0";
 
-                <div className="flex items-start gap-2.5 bg-slate-950/40 border border-slate-800/70 p-3 rounded-2xl">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">
-                    <strong className="text-blue-300">Simulador de Cotizaciones:</strong> Se dejó predeterminado el logo y el formato ejecutivo en propuestas.
-                  </span>
-                </div>
+                      return (
+                        <div
+                          key={item.name}
+                          className="bg-slate-900/80 border border-slate-800/90 hover:border-orange-500/40 rounded-xl p-2.5 sm:px-3 sm:py-2.5 transition-all relative overflow-hidden group"
+                        >
+                          <div
+                            className="absolute left-0 top-0 bottom-0 bg-orange-500/10 transition-all pointer-events-none"
+                            style={{ width: `${pctOfMax}%` }}
+                          ></div>
 
-                <div className="flex items-start gap-2.5 bg-slate-950/40 border border-slate-800/70 p-3 rounded-2xl">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">
-                    <strong className="text-cyan-300">Data en Vivo:</strong> Conexión continua con el registro de ventas de Google Sheets para métricas al instante.
-                  </span>
+                          <div className="relative flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span
+                                className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${
+                                  idx === 0
+                                    ? "bg-orange-500 text-white shadow-sm ring-2 ring-orange-500/40 font-black"
+                                    : idx === 1
+                                    ? "bg-slate-300 text-slate-950 font-bold"
+                                    : idx === 2
+                                    ? "bg-amber-700/80 text-amber-100 font-bold"
+                                    : "bg-slate-800 text-slate-400 font-semibold text-[11px]"
+                                }`}
+                              >
+                                {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
+                              </span>
+
+                              <div className="min-w-0">
+                                <p className="text-xs sm:text-sm font-bold text-slate-100 truncate group-hover:text-orange-300 transition-colors">
+                                  {item.name}
+                                </p>
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  {pctOfTotal}% de los sistemas del mes
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <span className="text-xs sm:text-sm font-black text-orange-300 font-mono bg-orange-500/20 border border-orange-500/30 px-2.5 py-1 rounded-lg">
+                                {item.cantidad} <span className="text-[10px] font-bold text-orange-200/80">unid.</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
+
+            </div>
+
+            {/* Footer de sincronización */}
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                Métricas del mes vigente calculadas en tiempo real desde la base de datos de ventas.
+              </span>
+              <span className="font-mono text-slate-500 hidden sm:inline">
+                Actualizado automáticamente
+              </span>
             </div>
           </div>
         </div>
