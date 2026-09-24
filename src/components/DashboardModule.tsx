@@ -345,15 +345,15 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   }, [selectedMonth]);
 
   // Fetch Google Sheets Data
-  const fetchGoogleSheetData = async () => {
+  const fetchGoogleSheetData = async (force: boolean = false) => {
     setIsLoading(true);
     setSyncStatus("loading");
     try {
       let csvText = "";
       
-      // Attempt 1: Local server proxy (cache-busted)
+      // Attempt 1: Local server proxy (instant cache + force query option)
       try {
-        const resProxy = await fetch(`/api/sheets?t=${Date.now()}`);
+        const resProxy = await fetch(`/api/sheets?t=${Date.now()}${force ? "&force=true" : ""}`);
         if (resProxy.ok) {
           const t = await resProxy.text();
           if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
@@ -426,16 +426,23 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         }
       }
 
-      // Default fallback to INITIAL_OFFLINE_SALES merged with custom sales
-      const fallbackSlice = INITIAL_OFFLINE_SALES.slice(0, 10000);
-      const mergedFallback = mergeRemoteSalesWithLocal(fallbackSlice);
-      setSales(mergedFallback);
-      setSyncStatus("success");
+      // Safe fallback to current stored sales rather than wiping with old data
+      const currentStored = getStoredSales();
+      if (currentStored.length > 0) {
+        setSales(currentStored);
+        setSyncStatus("success");
+      } else {
+        const fallbackSlice = INITIAL_OFFLINE_SALES.slice(0, 10000);
+        const mergedFallback = mergeRemoteSalesWithLocal(fallbackSlice);
+        setSales(mergedFallback);
+        setSyncStatus("success");
+      }
     } catch (error) {
       console.warn("Using offline dataset due to Google Sheets sync error:", error);
-      const fallbackSlice = INITIAL_OFFLINE_SALES.slice(0, 10000);
-      const mergedFallback = mergeRemoteSalesWithLocal(fallbackSlice);
-      setSales(mergedFallback);
+      const currentStored = getStoredSales();
+      if (currentStored.length > 0) {
+        setSales(currentStored);
+      }
       setSyncStatus("error");
     } finally {
       setIsLoading(false);
@@ -447,13 +454,13 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     fetchGoogleSheetData();
   }, []);
 
-  // CSV Parser (up to 5000 records)
+  // CSV Parser (up to 10000 records)
   const parseSalesCSV = (csvText: string): SaleTransaction[] => {
-    const lines = csvText.split("\n");
+    const lines = csvText.split(/\r?\n/);
     const result: SaleTransaction[] = [];
 
     for (let i = 1; i < lines.length; i++) {
-      if (result.length >= 5000) break;
+      if (result.length >= 10000) break;
       const line = lines[i].trim();
       if (!line) continue;
 
@@ -1110,7 +1117,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         </div>
 
         <button
-          onClick={fetchGoogleSheetData}
+          onClick={() => fetchGoogleSheetData(true)}
           disabled={isLoading}
           className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs transition-all shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
         >

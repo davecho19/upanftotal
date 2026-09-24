@@ -1,5 +1,21 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Lock, KeyRound, ArrowRight, AlertTriangle, Building2, FileCheck, Eye, EyeOff, Bell, Sparkles, CheckCircle2, TrendingUp, DollarSign, Trophy, Award } from "lucide-react";
+import {
+  Lock,
+  KeyRound,
+  ArrowRight,
+  AlertTriangle,
+  Building2,
+  FileCheck,
+  Eye,
+  EyeOff,
+  TrendingUp,
+  DollarSign,
+  Trophy,
+  Users,
+  RefreshCw,
+  Clock,
+  ShieldCheck
+} from "lucide-react";
 import {
   SaleTransaction,
   getStoredSales,
@@ -45,8 +61,10 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>("En vivo");
 
-  // Raw sales transactions for calculating top products
+  // Raw sales transactions for calculating metrics
   const [salesTransactions, setSalesTransactions] = useState<SaleTransaction[]>(() => getStoredSales());
 
   // Calculate initial totals strictly for the current month from stored sales
@@ -106,6 +124,84 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
     };
   }, [salesTransactions]);
 
+  // Ranking de Asesores Comerciales con el Monto Vendido de Cada Uno (Mes Vigente)
+  const advisorRankingCurrentMonth = useMemo(() => {
+    const currentMonthStr = getCurrentMonthString();
+    const map: Record<string, {
+      name: string;
+      totalSinIva: number;
+      totalConIva: number;
+      ventasCount: number;
+      sistemasSinIva: number;
+      firmasSinIva: number;
+      sistemasCount: number;
+      firmasCount: number;
+      mainCategory: "upconta" | "firmas" | "mixto";
+    }> = {};
+
+    let grandTotalMesSinIva = 0;
+
+    salesTransactions.forEach((s) => {
+      if (matchMonth(s, currentMonthStr)) {
+        const rawName = (s.asesor || "").trim();
+        if (!rawName) return;
+
+        if (!map[rawName]) {
+          map[rawName] = {
+            name: rawName,
+            totalSinIva: 0,
+            totalConIva: 0,
+            ventasCount: 0,
+            sistemasSinIva: 0,
+            firmasSinIva: 0,
+            sistemasCount: 0,
+            firmasCount: 0,
+            mainCategory: "mixto"
+          };
+        }
+
+        const isUp = isUpContaSale(s);
+        const sinIva = Number(s.totalSinIva) || (Number(s.total) ? Number((s.total / 1.15).toFixed(2)) : 0);
+        const conIva = Number(s.total) || 0;
+
+        map[rawName].totalSinIva += sinIva;
+        map[rawName].totalConIva += conIva;
+        map[rawName].ventasCount += 1;
+        grandTotalMesSinIva += sinIva;
+
+        if (isUp) {
+          map[rawName].sistemasSinIva += sinIva;
+          map[rawName].sistemasCount += 1;
+        } else {
+          map[rawName].firmasSinIva += sinIva;
+          map[rawName].firmasCount += 1;
+        }
+      }
+    });
+
+    const list = Object.values(map).map((adv) => {
+      let mainCat: "upconta" | "firmas" | "mixto" = "mixto";
+      if (adv.sistemasCount > 0 && adv.firmasCount === 0) mainCat = "upconta";
+      else if (adv.firmasCount > 0 && adv.sistemasCount === 0) mainCat = "firmas";
+      return {
+        ...adv,
+        mainCategory: mainCat,
+        percentageOfTotal: grandTotalMesSinIva > 0 ? (adv.totalSinIva / grandTotalMesSinIva) * 100 : 0
+      };
+    });
+
+    // Ordenar de mayor a menor por totalSinIva
+    list.sort((a, b) => b.totalSinIva - a.totalSinIva);
+
+    const maxLeaderTotal = list.length > 0 ? list[0].totalSinIva : 1;
+
+    return {
+      list,
+      maxLeaderTotal,
+      grandTotalMesSinIva
+    };
+  }, [salesTransactions]);
+
   // Helper parser for Google Sheets CSV matching DashboardModule
   const parseCSVToTransactions = (text: string): SaleTransaction[] => {
     const lines = text.split(/\r?\n/);
@@ -143,7 +239,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
         const valorAdicional = parseFloat((cols[9] || "0").replace(/\$/g, "").replace(/,/g, "")) || 0;
         const descuento = parseFloat((cols[10] || "0").replace(/\$/g, "").replace(/,/g, "")) || 0;
         const total = parseFloat((cols[11] || "0").replace(/\$/g, "").replace(/,/g, "")) || 0;
-        const totalSinIva = parseFloat((cols[12] || "0").replace(/\$/g, "").replace(/,/g, "")) || (total > 0 ? total / 1.15 : 0);
+        const totalSinIva = parseFloat((cols[12] || "0").replace(/\$/g, "").replace(/,/g, "")) || (total > 0 ? parseFloat((total / 1.15).toFixed(2)) : 0);
 
         let rawMes = cols[13] ? cols[13].trim() : "";
         let mes = rawMes;
@@ -172,90 +268,86 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
     return result;
   };
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadDashboardSales = async (force: boolean = false) => {
+    setIsRefreshing(true);
+    try {
+      let csvText = "";
 
-    async function loadDashboardSales() {
+      // 1. Try server proxy (instant memory cache + force option)
       try {
-        let csvText = "";
+        const res = await fetch(`/api/sheets?t=${Date.now()}${force ? "&force=true" : ""}`);
+        if (res.ok) {
+          const t = await res.text();
+          if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
+            csvText = t;
+          }
+        }
+      } catch (e) {
+        console.warn("Proxy fetch error:", e);
+      }
 
-        // 1. Try server proxy (like DashboardModule)
+      // 2. Try direct Google Sheets export if proxy empty
+      if (!csvText) {
         try {
-          const res = await fetch(`/api/sheets?t=${Date.now()}`);
-          if (res.ok) {
-            const t = await res.text();
+          const res0 = await fetch(
+            "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000"
+          );
+          if (res0.ok) {
+            const t = await res0.text();
             if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
               csvText = t;
             }
           }
         } catch (e) {
-          console.warn("Proxy fetch error:", e);
+          console.warn("Direct fetch error:", e);
         }
-
-        // 2. Try direct Google Sheets export if proxy empty
-        if (!csvText) {
-          try {
-            const res0 = await fetch(
-              "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000"
-            );
-            if (res0.ok) {
-              const t = await res0.text();
-              if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
-                csvText = t;
-              }
-            }
-          } catch (e) {
-            console.warn("Direct fetch error:", e);
-          }
-        }
-
-        if (csvText) {
-          const parsed = parseCSVToTransactions(csvText);
-          if (parsed.length > 0) {
-            const merged = mergeRemoteSalesWithLocal(parsed);
-            const currentMonthTotals = calculateCurrentMonthTotals(merged);
-            if (isMounted) {
-              setSalesTransactions(merged);
-              setSalesTotals({
-                upconta: currentMonthTotals.upconta,
-                firmas: currentMonthTotals.firmas,
-                total: currentMonthTotals.total,
-                monthLabel: currentMonthTotals.monthLabel
-              });
-            }
-            return;
-          }
-        }
-
-        // Fallback to local stored sales
-        const stored = getStoredSales();
-        const currentTotals = calculateCurrentMonthTotals(stored);
-        if (isMounted) {
-          setSalesTransactions(stored);
-          setSalesTotals({
-            upconta: currentTotals.upconta,
-            firmas: currentTotals.firmas,
-            total: currentTotals.total,
-            monthLabel: currentTotals.monthLabel
-          });
-        }
-      } catch (err) {
-        console.error("Error loading dashboard sales in home screen:", err);
       }
+
+      if (csvText) {
+        const parsed = parseCSVToTransactions(csvText);
+        if (parsed.length > 0) {
+          const merged = mergeRemoteSalesWithLocal(parsed);
+          const currentMonthTotals = calculateCurrentMonthTotals(merged);
+          setSalesTransactions(merged);
+          setSalesTotals({
+            upconta: currentMonthTotals.upconta,
+            firmas: currentMonthTotals.firmas,
+            total: currentMonthTotals.total,
+            monthLabel: currentMonthTotals.monthLabel
+          });
+          setLastSyncTime(new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+          return;
+        }
+      }
+
+      // Safe fallback: use current stored sales
+      const stored = getStoredSales();
+      const currentTotals = calculateCurrentMonthTotals(stored);
+      setSalesTransactions(stored);
+      setSalesTotals({
+        upconta: currentTotals.upconta,
+        firmas: currentTotals.firmas,
+        total: currentTotals.total,
+        monthLabel: currentTotals.monthLabel
+      });
+      setLastSyncTime(new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    } catch (err) {
+      console.error("Error loading dashboard sales in home screen:", err);
+    } finally {
+      setIsRefreshing(false);
     }
+  };
 
-    loadDashboardSales();
+  useEffect(() => {
+    loadDashboardSales(false);
 
-    // Auto-refresh periodically every 60 seconds to keep in sync with Google Sheets
-    const intervalId = setInterval(loadDashboardSales, 60000);
+    const intervalId = setInterval(() => loadDashboardSales(false), 60000);
 
-    // Also refresh when tab regains focus
     const handleFocus = () => {
-      loadDashboardSales();
+      loadDashboardSales(false);
     };
     window.addEventListener("focus", handleFocus);
 
-    // Listen for sales updates from other components
     const handleSalesUpdate = () => {
       const stored = getStoredSales();
       const currentTotals = calculateCurrentMonthTotals(stored);
@@ -266,13 +358,13 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
         total: currentTotals.total,
         monthLabel: currentTotals.monthLabel
       });
+      setLastSyncTime(new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     };
 
     window.addEventListener("sales_data_updated", handleSalesUpdate);
     window.addEventListener("storage", handleSalesUpdate);
 
     return () => {
-      isMounted = false;
       clearInterval(intervalId);
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("sales_data_updated", handleSalesUpdate);
@@ -283,374 +375,90 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!codeInput.trim()) {
-      setErrorMessage("Por favor ingresa un código de acceso.");
+      setErrorMessage("Ingresa tu clave de acceso.");
       return;
     }
 
     setIsSubmitting(true);
     const success = onUnlock(codeInput.trim());
     if (!success) {
-      setErrorMessage("Código no válido. Solicita tu código al administrador.");
+      setErrorMessage("Clave no válida. Solicita autorización a gerencia.");
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-[#0B2545] to-slate-950 text-white flex flex-col justify-between p-4 sm:p-6 select-none font-sans">
-      {/* Top Bar */}
-      <header className="max-w-6xl w-full mx-auto flex items-center justify-between py-4 border-b border-white/10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-[#07172B] to-slate-950 text-white flex flex-col justify-between p-4 sm:p-6 lg:p-8 select-none font-sans">
+      {/* Top Header Ejecutivo */}
+      <header className="max-w-7xl w-full mx-auto flex items-center justify-between py-3.5 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-white drop-shadow-sm">
-            INTRANET UPCONTA Y ANF
-          </h1>
+          <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30">
+            <ShieldCheck className="w-5 h-5 text-amber-400" />
+          </div>
+          <div>
+            <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-white flex items-center gap-2">
+              <span>INTRANET GERENCIAL</span>
+              <span className="text-orange-400 font-extrabold">UPCONTA</span>
+              <span className="text-slate-500 font-normal">&amp;</span>
+              <span className="text-amber-400 font-extrabold">ANF AC</span>
+            </h1>
+            <p className="text-[11px] text-slate-400 font-medium">
+              Consola Comercial de Rendimiento • Ecuador 2026
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-300">
-          <Lock className="w-3.5 h-3.5 text-amber-400" />
-          <span className="hidden sm:inline">Portal Comercial Seguro</span>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => loadDashboardSales(true)}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-xs font-bold text-slate-200 transition-colors cursor-pointer disabled:opacity-50 shadow-sm"
+            title="Sincronizar datos en vivo con Google Sheets"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-orange-400 ${isRefreshing ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">{isRefreshing ? "Sincronizando..." : "Sincronizar Sheets"}</span>
+          </button>
+
+          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-700/80 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-300 shadow-sm">
+            <Lock className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden md:inline">Acceso Protegido</span>
+          </div>
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="max-w-6xl w-full mx-auto my-6 sm:my-8 space-y-6">
+      {/* Main Container Ejecutivo */}
+      <main className="max-w-7xl w-full mx-auto my-5 space-y-6">
         
-        {/* 1. TOP 5 PRODUCTOS MÁS VENDIDOS (FIRMAS & SISTEMAS) - MES VIGENTE */}
-        <div className="w-full bg-slate-900/90 border border-slate-700/80 rounded-3xl shadow-2xl p-6 sm:p-7 backdrop-blur-xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-400"></div>
-
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 shadow-sm">
-                  <Trophy className="w-6 h-6 text-amber-400" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-                      <Sparkles className="w-3 h-3 text-amber-400" />
-                      Ranking de Demanda Comercial
-                    </span>
-                    <span className="text-xs text-slate-400 font-semibold">
-                      Mes Vigente: <strong className="text-amber-300">{salesTotals.monthLabel}</strong>
-                    </span>
-                  </div>
-                  <h2 className="text-lg sm:text-xl font-black text-white tracking-tight mt-1">
-                    Top 5 Productos Más Vendidos en Firmas &amp; Sistemas
-                  </h2>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-400 self-start sm:self-auto">
-                <span className="px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800 text-slate-300 flex items-center gap-1.5">
-                  <FileCheck className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Firmas: <strong className="text-amber-300 font-mono">{topProductsCurrentMonth.totalUnidadesFirmas}</strong> unid.</span>
-                </span>
-                <span className="px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800 text-slate-300 flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-orange-400" />
-                  <span>Sistemas: <strong className="text-orange-300 font-mono">{topProductsCurrentMonth.totalUnidadesSistemas}</strong> unid.</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Grid de 2 Columnas: Firmas Electrónicas vs Sistemas UpConta */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              
-              {/* Columna 1: Top 5 Firmas Electrónicas */}
-              <div className="bg-slate-950/60 border border-amber-500/20 rounded-2xl p-4 sm:p-5 flex flex-col justify-between relative overflow-hidden">
-                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-3.5">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      <FileCheck className="w-4 h-4 text-amber-400" />
-                    </span>
-                    <div>
-                      <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                        <span>Top 5 en Firmas Electrónicas</span>
-                        <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/30">ANF AC</span>
-                      </h3>
-                      <p className="text-[11px] text-slate-400">Certificados y firmas digitales del mes</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-black text-amber-300 font-mono bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
-                    {topProductsCurrentMonth.totalUnidadesFirmas} Total
-                  </span>
-                </div>
-
-                <div className="space-y-2.5 flex-1">
-                  {topProductsCurrentMonth.topFirmas.length === 0 ? (
-                    <div className="text-center py-6 text-slate-500 text-xs font-medium">
-                      No hay ventas de firmas registradas en {salesTotals.monthLabel}
-                    </div>
-                  ) : (
-                    topProductsCurrentMonth.topFirmas.map((item, idx) => {
-                      const maxQty = topProductsCurrentMonth.topFirmas[0]?.cantidad || 1;
-                      const pctOfMax = (item.cantidad / maxQty) * 100;
-                      const pctOfTotal = topProductsCurrentMonth.totalUnidadesFirmas > 0
-                        ? ((item.cantidad / topProductsCurrentMonth.totalUnidadesFirmas) * 100).toFixed(1)
-                        : "0";
-
-                      return (
-                        <div
-                          key={item.name}
-                          className="bg-slate-900/80 border border-slate-800/90 hover:border-amber-500/40 rounded-xl p-2.5 sm:px-3 sm:py-2.5 transition-all relative overflow-hidden group"
-                        >
-                          <div
-                            className="absolute left-0 top-0 bottom-0 bg-amber-500/10 transition-all pointer-events-none"
-                            style={{ width: `${pctOfMax}%` }}
-                          ></div>
-
-                          <div className="relative flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span
-                                className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${
-                                  idx === 0
-                                    ? "bg-amber-400 text-slate-950 shadow-sm ring-2 ring-amber-400/40 font-black"
-                                    : idx === 1
-                                    ? "bg-slate-300 text-slate-950 font-bold"
-                                    : idx === 2
-                                    ? "bg-amber-700/80 text-amber-100 font-bold"
-                                    : "bg-slate-800 text-slate-400 font-semibold text-[11px]"
-                                }`}
-                              >
-                                {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
-                              </span>
-
-                              <div className="min-w-0">
-                                <p className="text-xs sm:text-sm font-bold text-slate-100 truncate group-hover:text-amber-300 transition-colors">
-                                  {item.name}
-                                </p>
-                                <span className="text-[10px] text-slate-400 font-mono">
-                                  {pctOfTotal}% de las firmas del mes
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="text-right shrink-0">
-                              <span className="text-xs sm:text-sm font-black text-amber-300 font-mono bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 rounded-lg">
-                                {item.cantidad} <span className="text-[10px] font-bold text-amber-200/80">unid.</span>
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              {/* Columna 2: Top 5 Sistemas UpConta */}
-              <div className="bg-slate-950/60 border border-orange-500/20 rounded-2xl p-4 sm:p-5 flex flex-col justify-between relative overflow-hidden">
-                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-3.5">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                      <Building2 className="w-4 h-4 text-orange-400" />
-                    </span>
-                    <div>
-                      <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                        <span>Top 5 en Sistemas &amp; Planes ERP</span>
-                        <span className="text-[10px] font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/30">UpConta</span>
-                      </h3>
-                      <p className="text-[11px] text-slate-400">Facturación electrónica y software contable</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-black text-orange-300 font-mono bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-lg">
-                    {topProductsCurrentMonth.totalUnidadesSistemas} Total
-                  </span>
-                </div>
-
-                <div className="space-y-2.5 flex-1">
-                  {topProductsCurrentMonth.topSistemas.length === 0 ? (
-                    <div className="text-center py-6 text-slate-500 text-xs font-medium">
-                      No hay ventas de sistemas registradas en {salesTotals.monthLabel}
-                    </div>
-                  ) : (
-                    topProductsCurrentMonth.topSistemas.map((item, idx) => {
-                      const maxQty = topProductsCurrentMonth.topSistemas[0]?.cantidad || 1;
-                      const pctOfMax = (item.cantidad / maxQty) * 100;
-                      const pctOfTotal = topProductsCurrentMonth.totalUnidadesSistemas > 0
-                        ? ((item.cantidad / topProductsCurrentMonth.totalUnidadesSistemas) * 100).toFixed(1)
-                        : "0";
-
-                      return (
-                        <div
-                          key={item.name}
-                          className="bg-slate-900/80 border border-slate-800/90 hover:border-orange-500/40 rounded-xl p-2.5 sm:px-3 sm:py-2.5 transition-all relative overflow-hidden group"
-                        >
-                          <div
-                            className="absolute left-0 top-0 bottom-0 bg-orange-500/10 transition-all pointer-events-none"
-                            style={{ width: `${pctOfMax}%` }}
-                          ></div>
-
-                          <div className="relative flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span
-                                className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${
-                                  idx === 0
-                                    ? "bg-orange-500 text-white shadow-sm ring-2 ring-orange-500/40 font-black"
-                                    : idx === 1
-                                    ? "bg-slate-300 text-slate-950 font-bold"
-                                    : idx === 2
-                                    ? "bg-amber-700/80 text-amber-100 font-bold"
-                                    : "bg-slate-800 text-slate-400 font-semibold text-[11px]"
-                                }`}
-                              >
-                                {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
-                              </span>
-
-                              <div className="min-w-0">
-                                <p className="text-xs sm:text-sm font-bold text-slate-100 truncate group-hover:text-orange-300 transition-colors">
-                                  {item.name}
-                                </p>
-                                <span className="text-[10px] text-slate-400 font-mono">
-                                  {pctOfTotal}% de los sistemas del mes
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="text-right shrink-0">
-                              <span className="text-xs sm:text-sm font-black text-orange-300 font-mono bg-orange-500/20 border border-orange-500/30 px-2.5 py-1 rounded-lg">
-                                {item.cantidad} <span className="text-[10px] font-bold text-orange-200/80">unid.</span>
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-            </div>
-
-            {/* Footer de sincronización */}
-            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                Métricas del mes vigente calculadas en tiempo real desde la base de datos de ventas.
-              </span>
-              <span className="font-mono text-slate-500 hidden sm:inline">
-                Actualizado automáticamente
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. Fila Inferior: Total Ventas del Mes Actual (Izquierda) + Código de Acceso (Derecha) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full items-stretch">
+        {/* ========================================================================= */}
+        {/* 1. SECCIÓN SUPERIOR: INGRESO DE CLAVE (IZQ) + TOTALES CONSOLIDADOS (DER) */}
+        {/* ========================================================================= */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 w-full items-stretch">
           
-          {/* Recuadro Total Ventas - Solo Mes Actual y Solo UpConta y Firmas */}
-          <div className="bg-slate-900/90 border border-slate-700/80 rounded-3xl shadow-2xl p-6 sm:p-8 backdrop-blur-xl relative overflow-hidden flex flex-col justify-between">
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-400"></div>
-
-            <div className="space-y-5">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
-                    <TrendingUp className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-black text-white uppercase tracking-wider">
-                      Total Ventas (Sin IVA)
-                    </h2>
-                    <p className="text-xs text-emerald-400 font-bold">
-                      Mes Actual ({salesTotals.monthLabel}) • Sin IVA
-                    </p>
-                  </div>
-                </div>
-
-                <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[11px] font-bold px-2.5 py-1 rounded-full">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  En Vivo
-                </span>
-              </div>
-
-              {/* Data solicitada: Solo total de ventas de UpConta y Firmas del mes actual (Sin IVA) */}
-              <div className="space-y-3.5">
-                {/* Ventas UpConta (Mes Actual - Sin IVA) */}
-                <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full bg-orange-500 shrink-0"></div>
-                    <div>
-                      <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
-                        Ventas UpConta (Sin IVA)
-                      </span>
-                      <span className="text-sm font-semibold text-slate-200">
-                        ERP &amp; Facturación
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xl sm:text-2xl font-black text-orange-400 font-mono">
-                      ${salesTotals.upconta.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Ventas Firmas (Mes Actual - Sin IVA) */}
-                <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full bg-amber-400 shrink-0"></div>
-                    <div>
-                      <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
-                        Ventas Firmas (Sin IVA)
-                      </span>
-                      <span className="text-sm font-semibold text-slate-200">
-                        Firmas Electrónicas ANF
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xl sm:text-2xl font-black text-amber-400 font-mono">
-                      ${salesTotals.firmas.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Gran Total Consolidado (Mes Actual - Sin IVA) */}
-                <div className="bg-gradient-to-r from-emerald-950/50 to-slate-950/70 border border-emerald-500/30 rounded-2xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-emerald-500/20 rounded-lg text-emerald-400">
-                      <DollarSign className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-black uppercase tracking-wider text-emerald-300">
-                      Total Consolidado (Sin IVA)
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">
-                      ${salesTotals.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Pie informativo conciso */}
-            <div className="mt-4 pt-3 border-t border-slate-800/80 text-center text-[11px] text-slate-400 font-medium">
-              Ventas netas sin IVA acumuladas de {salesTotals.monthLabel}
-            </div>
-          </div>
-
-          {/* Recuadro Código de Acceso Comercial (Derecha) */}
-          <div className="bg-slate-900/90 border border-slate-700/80 rounded-3xl shadow-2xl p-6 sm:p-8 backdrop-blur-xl relative overflow-hidden flex flex-col justify-between">
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500"></div>
+          {/* Tarjeta 1: Ingreso de Clave de Acceso (Sin códigos expuestos) */}
+          <div className="lg:col-span-4 bg-slate-900/90 border border-slate-700/80 rounded-2xl shadow-xl p-5 sm:p-6 backdrop-blur-xl relative overflow-hidden flex flex-col justify-between">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500"></div>
 
             <div className="space-y-4">
-              <div className="border-b border-slate-800/80 pb-4">
-                <h2 className="text-lg font-black text-white uppercase tracking-wider flex items-center gap-2">
-                  <KeyRound className="w-5 h-5 text-amber-400" />
-                  <span>Código de Acceso</span>
-                </h2>
-                <p className="text-xs text-slate-400 font-medium mt-0.5">
-                  Ingresa tus credenciales para ingresar al sistema
-                </p>
+              <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm sm:text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+                    <KeyRound className="w-4 h-4 text-amber-400" />
+                    <span>Autenticación de Acceso</span>
+                  </h2>
+                  <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
+                    Ingresa tu credencial para habilitar módulos y cotizador
+                  </p>
+                </div>
+                <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                  <Lock className="w-3.5 h-3.5" />
+                </div>
               </div>
 
-              {/* Access Form */}
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                    Clave de Acceso
+              {/* Formulario de Código Limpio y Seguro */}
+              <form onSubmit={handleSubmit} className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-300 uppercase tracking-wider block">
+                    Clave de Autorización
                   </label>
 
                   <div className="relative">
@@ -661,24 +469,24 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
                         setCodeInput(e.target.value);
                         if (errorMessage) setErrorMessage("");
                       }}
-                      placeholder="Ingresa tu código..."
+                      placeholder="••••••"
                       autoFocus
-                      className="w-full bg-slate-950/80 border border-slate-700 text-white font-mono text-center text-lg sm:text-xl font-black tracking-widest px-4 py-3 rounded-2xl focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30 placeholder:text-slate-500 placeholder:font-sans placeholder:text-sm placeholder:tracking-normal transition-all"
+                      className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-center text-lg sm:text-xl font-black tracking-widest px-4 py-2.5 rounded-xl focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 placeholder:text-slate-700 transition-all"
                     />
 
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
-                      title={showPassword ? "Ocultar código" : "Mostrar código"}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 rounded transition-colors cursor-pointer"
+                      title={showPassword ? "Ocultar" : "Mostrar"}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
 
                   {errorMessage && (
-                    <div className="flex items-center gap-2 text-rose-400 bg-rose-950/60 border border-rose-800/80 px-3 py-2 rounded-xl text-xs font-bold animate-shake">
-                      <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                    <div className="flex items-center gap-1.5 text-rose-400 bg-rose-950/60 border border-rose-800/80 px-3 py-1.5 rounded-lg text-[11px] font-bold">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
                       <span>{errorMessage}</span>
                     </div>
                   )}
@@ -687,37 +495,441 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full py-3.5 px-4 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 active:scale-98 text-slate-950 font-black text-sm uppercase tracking-wider rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 border border-amber-300"
+                  className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 border border-amber-300/40"
                 >
                   <span>Ingresar al Sistema</span>
-                  <ArrowRight className="w-4 h-4 text-slate-950 font-black" />
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-950 font-black" />
                 </button>
               </form>
             </div>
 
-            {/* Commercial Lines Footer Note */}
-            <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-around text-center text-[11px] text-slate-400 font-bold">
-              <div className="flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-orange-400" />
-                <span>Línea UpConta ERP</span>
+            <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500 font-medium">
+              <span>Módulos Comerciales • Cotizador Oficial</span>
+              <span className="text-amber-400/80 font-mono">Confidencial</span>
+            </div>
+          </div>
+
+          {/* Tarjeta 2: Resumen Ejecutivo de Ventas del Mes Vigente (8 columnas) */}
+          <div className="lg:col-span-8 bg-slate-900/90 border border-slate-700/80 rounded-2xl shadow-xl p-5 sm:p-6 backdrop-blur-xl relative overflow-hidden flex flex-col justify-between">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-400"></div>
+
+            <div className="space-y-3.5">
+              {/* Header de Ventas */}
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-black text-white uppercase tracking-wider">
+                      Ventas Mes Vigente ({salesTotals.monthLabel})
+                    </h2>
+                    <p className="text-[11px] text-emerald-400 font-semibold">
+                      Valores Netos Facturados Sin IVA
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Google Sheets En Vivo</span>
+                  </span>
+                </div>
               </div>
-              <span className="text-slate-700">•</span>
-              <div className="flex items-center gap-1.5">
-                <FileCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span>Línea Firmas ANF</span>
+
+              {/* Grid 3 KPIs Ejecutivos: UpConta, Firmas, Total */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                
+                {/* 1. Ventas UpConta ERP */}
+                <div className="bg-slate-950/80 border border-orange-500/30 rounded-xl p-3.5 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 bottom-0 w-1 bg-orange-500"></div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-orange-400" />
+                      <span className="text-[10px] text-slate-300 font-black uppercase tracking-wider">
+                        UpConta ERP
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-orange-300 bg-orange-500/20 px-1.5 py-0.5 rounded font-mono">
+                      {topProductsCurrentMonth.totalUnidadesSistemas} u.
+                    </span>
+                  </div>
+                  <div className="text-lg sm:text-xl font-black text-orange-400 font-mono tracking-tight">
+                    ${salesTotals.upconta.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-medium">Facturación &amp; ERP</span>
+                </div>
+
+                {/* 2. Ventas Firmas Electrónicas ANF */}
+                <div className="bg-slate-950/80 border border-amber-500/30 rounded-xl p-3.5 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 bottom-0 w-1 bg-amber-400"></div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <FileCheck className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="text-[10px] text-slate-300 font-black uppercase tracking-wider">
+                        Firmas ANF
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded font-mono">
+                      {topProductsCurrentMonth.totalUnidadesFirmas} u.
+                    </span>
+                  </div>
+                  <div className="text-lg sm:text-xl font-black text-amber-400 font-mono tracking-tight">
+                    ${salesTotals.firmas.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-medium">Token &amp; Archivo</span>
+                </div>
+
+                {/* 3. Gran Total Consolidado */}
+                <div className="bg-gradient-to-br from-emerald-950/70 to-slate-950 border border-emerald-500/40 rounded-xl p-3.5 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 bottom-0 w-1 bg-emerald-400"></div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-[10px] text-emerald-300 font-black uppercase tracking-wider">
+                        Total Mes
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded font-mono">
+                      Sin IVA
+                    </span>
+                  </div>
+                  <div className="text-lg sm:text-xl font-black text-emerald-400 font-mono tracking-tight">
+                    ${salesTotals.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    {salesTransactions.filter(s => matchMonth(s, getCurrentMonthString())).length} operaciones
+                  </span>
+                </div>
+
               </div>
+            </div>
+
+            {/* Sub-footer informativo */}
+            <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
+              <span className="font-medium">
+                Base Histórica: <strong className="text-slate-200 font-mono">{salesTransactions.length}</strong> ventas auditadas
+              </span>
+              <span className="flex items-center gap-1 font-mono text-slate-500">
+                <Clock className="w-3 h-3 text-amber-400" />
+                <span>Última sincronización: {lastSyncTime}</span>
+              </span>
             </div>
           </div>
 
         </div>
+
+        {/* ========================================================================= */}
+        {/* 2. FILA HORIZONTAL DE 3 TABLAS EJECUTIVAS:                              */}
+        {/*    [1] MÁS VENDIDOS FIRMAS | [2] MÁS VENDIDOS SISTEMAS | [3] TOP ASESORES */}
+        {/* ========================================================================= */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+          
+          {/* ======================================================================= */}
+          {/* TABLA 1: PRODUCTOS MÁS VENDIDOS FIRMAS ELECTRÓNICAS (TOP 5)              */}
+          {/* ======================================================================= */}
+          <div className="bg-slate-900/90 border border-slate-700/80 rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl relative overflow-hidden flex flex-col justify-between">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-amber-400"></div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    <FileCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider">
+                      Más Vendidos Firmas
+                    </h3>
+                    <span className="text-[10px] text-amber-400 font-bold block">
+                      Top 5 Demanda • {salesTotals.monthLabel}
+                    </span>
+                  </div>
+                </div>
+
+                <span className="text-[10px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono">
+                  {topProductsCurrentMonth.totalUnidadesFirmas} u.
+                </span>
+              </div>
+
+              {/* Lista Top Firmas */}
+              <div className="space-y-2">
+                {topProductsCurrentMonth.topFirmas.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-xs">
+                    Sin ventas registradas en el mes.
+                  </div>
+                ) : (
+                  topProductsCurrentMonth.topFirmas.map((item, idx) => {
+                    const maxCount = topProductsCurrentMonth.topFirmas[0]?.cantidad || 1;
+                    const pctOfMax = Math.round((item.cantidad / maxCount) * 100);
+
+                    return (
+                      <div
+                        key={item.name}
+                        className="group relative bg-slate-950/70 border border-slate-800 hover:border-amber-500/40 rounded-xl p-2.5 transition-all overflow-hidden"
+                      >
+                        <div
+                          className="absolute left-0 top-0 bottom-0 bg-amber-500/10 pointer-events-none"
+                          style={{ width: `${pctOfMax}%` }}
+                        ></div>
+
+                        <div className="relative flex items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] shrink-0 ${
+                                idx === 0
+                                  ? "bg-amber-400 text-slate-950 font-black shadow-sm"
+                                  : idx === 1
+                                  ? "bg-slate-300 text-slate-950 font-bold"
+                                  : idx === 2
+                                  ? "bg-amber-700 text-amber-100 font-bold"
+                                  : "bg-slate-800 text-slate-400 font-semibold"
+                              }`}
+                            >
+                              {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : idx + 1}
+                            </span>
+
+                            <span className="text-xs font-bold text-slate-200 truncate group-hover:text-amber-300 transition-colors">
+                              {item.name}
+                            </span>
+                          </div>
+
+                          <div className="shrink-0 text-right">
+                            <span className="text-xs font-black text-amber-300 font-mono bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded">
+                              {item.cantidad} <span className="text-[9px] font-semibold text-amber-200/80">u.</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2 border-t border-slate-800/80 text-[10px] text-slate-500 flex justify-between font-mono">
+              <span>Firmas Electrónicas ANF AC</span>
+              <span>Ecuador</span>
+            </div>
+          </div>
+
+          {/* ======================================================================= */}
+          {/* TABLA 2: PRODUCTOS MÁS VENDIDOS SISTEMAS UPCONTA (TOP 5)                 */}
+          {/* ======================================================================= */}
+          <div className="bg-slate-900/90 border border-slate-700/80 rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl relative overflow-hidden flex flex-col justify-between">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-orange-500"></div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider">
+                      Más Vendidos Sistemas
+                    </h3>
+                    <span className="text-[10px] text-orange-400 font-bold block">
+                      Top 5 Demanda • {salesTotals.monthLabel}
+                    </span>
+                  </div>
+                </div>
+
+                <span className="text-[10px] font-bold text-orange-300 bg-orange-500/15 border border-orange-500/30 px-2 py-0.5 rounded-full font-mono">
+                  {topProductsCurrentMonth.totalUnidadesSistemas} u.
+                </span>
+              </div>
+
+              {/* Lista Top Sistemas */}
+              <div className="space-y-2">
+                {topProductsCurrentMonth.topSistemas.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-xs">
+                    Sin ventas registradas en el mes.
+                  </div>
+                ) : (
+                  topProductsCurrentMonth.topSistemas.map((item, idx) => {
+                    const maxCount = topProductsCurrentMonth.topSistemas[0]?.cantidad || 1;
+                    const pctOfMax = Math.round((item.cantidad / maxCount) * 100);
+
+                    return (
+                      <div
+                        key={item.name}
+                        className="group relative bg-slate-950/70 border border-slate-800 hover:border-orange-500/40 rounded-xl p-2.5 transition-all overflow-hidden"
+                      >
+                        <div
+                          className="absolute left-0 top-0 bottom-0 bg-orange-500/10 pointer-events-none"
+                          style={{ width: `${pctOfMax}%` }}
+                        ></div>
+
+                        <div className="relative flex items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] shrink-0 ${
+                                idx === 0
+                                  ? "bg-orange-500 text-white font-black shadow-sm"
+                                  : idx === 1
+                                  ? "bg-slate-300 text-slate-950 font-bold"
+                                  : idx === 2
+                                  ? "bg-amber-700 text-amber-100 font-bold"
+                                  : "bg-slate-800 text-slate-400 font-semibold"
+                              }`}
+                            >
+                              {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : idx + 1}
+                            </span>
+
+                            <span className="text-xs font-bold text-slate-200 truncate group-hover:text-orange-300 transition-colors">
+                              {item.name}
+                            </span>
+                          </div>
+
+                          <div className="shrink-0 text-right">
+                            <span className="text-xs font-black text-orange-300 font-mono bg-orange-500/20 border border-orange-500/30 px-2 py-0.5 rounded">
+                              {item.cantidad} <span className="text-[9px] font-semibold text-orange-200/80">u.</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2 border-t border-slate-800/80 text-[10px] text-slate-500 flex justify-between font-mono">
+              <span>UpConta ERP &amp; Facturación SRI</span>
+              <span>Plataforma</span>
+            </div>
+          </div>
+
+          {/* ======================================================================= */}
+          {/* TABLA 3: RANKING DE ASESORES COMERCIALES (A LA DERECHA)                  */}
+          {/* ======================================================================= */}
+          <div className="bg-slate-900/90 border border-slate-700/80 rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl relative overflow-hidden flex flex-col justify-between">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 to-teal-400"></div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    <Trophy className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider">
+                      Ranking Asesores
+                    </h3>
+                    <span className="text-[10px] text-emerald-400 font-bold block">
+                      Monto Vendido • {salesTotals.monthLabel}
+                    </span>
+                  </div>
+                </div>
+
+                <span className="text-[10px] font-bold text-slate-300 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-full font-mono flex items-center gap-1">
+                  <Users className="w-3 h-3 text-emerald-400" />
+                  <span>{advisorRankingCurrentMonth.list.length}</span>
+                </span>
+              </div>
+
+              {/* Lista Ranking Asesores */}
+              <div className="space-y-2">
+                {advisorRankingCurrentMonth.list.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-xs">
+                    Sin ventas de asesores en el mes.
+                  </div>
+                ) : (
+                  advisorRankingCurrentMonth.list.slice(0, 5).map((adv, idx) => {
+                    const pctOfLeader = advisorRankingCurrentMonth.maxLeaderTotal > 0
+                      ? Math.round((adv.totalSinIva / advisorRankingCurrentMonth.maxLeaderTotal) * 100)
+                      : 0;
+
+                    const isFirst = idx === 0;
+                    const isSecond = idx === 1;
+                    const isThird = idx === 2;
+
+                    return (
+                      <div
+                        key={adv.name}
+                        className={`group relative border rounded-xl p-2.5 transition-all overflow-hidden ${
+                          isFirst
+                            ? "bg-slate-950/90 border-amber-500/40 shadow-sm"
+                            : isSecond
+                            ? "bg-slate-950/80 border-slate-400/30"
+                            : isThird
+                            ? "bg-slate-950/80 border-amber-700/30"
+                            : "bg-slate-950/70 border-slate-800 hover:border-slate-700"
+                        }`}
+                      >
+                        {/* Barra de progreso de fondo */}
+                        <div
+                          className={`absolute left-0 top-0 bottom-0 pointer-events-none opacity-15 ${
+                            isFirst ? "bg-amber-400" : isSecond ? "bg-slate-300" : isThird ? "bg-amber-600" : "bg-emerald-400"
+                          }`}
+                          style={{ width: `${pctOfLeader}%` }}
+                        ></div>
+
+                        <div className="relative flex items-center justify-between gap-2.5">
+                          {/* Asesor info */}
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] shrink-0 ${
+                                isFirst
+                                  ? "bg-amber-400 text-slate-950 font-black shadow-sm"
+                                  : isSecond
+                                  ? "bg-slate-300 text-slate-950 font-bold"
+                                  : isThird
+                                  ? "bg-amber-700 text-amber-100 font-bold"
+                                  : "bg-slate-800 text-slate-400 font-semibold"
+                              }`}
+                            >
+                              {isFirst ? "🥇" : isSecond ? "🥈" : isThird ? "🥉" : idx + 1}
+                            </span>
+
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-white truncate">
+                                {adv.name}
+                              </p>
+                              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
+                                <span>{adv.ventasCount} ventas</span>
+                                <span className="text-slate-600">•</span>
+                                <span className={adv.mainCategory === "upconta" ? "text-orange-400" : "text-amber-400"}>
+                                  {adv.mainCategory === "upconta" ? "ERP" : "Firmas"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Monto Sin IVA */}
+                          <div className="shrink-0 text-right">
+                            <div className={`text-xs sm:text-sm font-black font-mono ${
+                              isFirst ? "text-amber-300" : isSecond ? "text-slate-200" : "text-emerald-400"
+                            }`}>
+                              ${adv.totalSinIva.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            <span className="text-[9px] text-slate-500 font-mono block">
+                              Sin IVA
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2 border-t border-slate-800/80 text-[10px] text-slate-500 flex justify-between font-mono">
+              <span>Auditoría de Ventas</span>
+              <span className="text-emerald-400">Total Sin IVA</span>
+            </div>
+          </div>
+
+        </div>
+
       </main>
 
-      {/* Footer */}
-      <footer className="max-w-6xl w-full mx-auto text-center py-3 text-xs text-slate-500 font-medium">
-        <p>UpConta & Firmas Electrónicas.ec © 2026. Todos los derechos reservados.</p>
-        <p className="text-[10px] text-slate-600 mt-0.5">
-          Acceso estrictamente monitoreado y confidencial para la fuerza de ventas.
-        </p>
+      {/* Footer Ejecutivo */}
+      <footer className="max-w-7xl w-full mx-auto text-center py-2.5 text-[11px] text-slate-500 font-medium border-t border-white/5 mt-2">
+        <p>UpConta &amp; Firmas Electrónicas ANF AC © 2026 • Acceso Estrictamente Confidencial para Fuerza Comercial y Gerencia</p>
       </footer>
     </div>
   );

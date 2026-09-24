@@ -21,7 +21,7 @@ export interface SaleTransaction {
 
 export const STORAGE_KEY_SALES = "sales_data_db";
 export const STORAGE_KEY_CUSTOM_SALES = "custom_registered_sales_db";
-export const STORAGE_KEY_SALES_VERSION = "sales_data_v_2026_09_17_realtime";
+export const STORAGE_KEY_SALES_VERSION = "sales_data_v_2026_09_24_live_v3";
 
 export function normalizeDateString(dateStr: string): string {
   if (!dateStr) return "";

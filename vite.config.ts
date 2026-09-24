@@ -46,30 +46,175 @@ export default defineConfig(() => {
         name: 'brochures-and-sheets-middleware',
         configureServer(server) {
           server.middlewares.use('/brochures', handleBrochureRequest);
-          server.middlewares.use('/api/sheets', async (req, res) => {
-            try {
-              const response = await fetch("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z5000");
-              const csvText = await response.text();
-              res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-              res.end(csvText);
-            } catch (e) {
-              res.statusCode = 500;
-              res.end("Error fetching sheets");
+          
+          let cachedCsv = '';
+          const cacheFilePath = path.resolve(__dirname, '.sheets_cache.csv');
+          try {
+            if (fs.existsSync(cacheFilePath)) {
+              cachedCsv = fs.readFileSync(cacheFilePath, 'utf8');
             }
+          } catch (e) {}
+
+          let lastFetchTime = cachedCsv ? Date.now() : 0;
+          let isFetching = false;
+
+          const refreshFromGoogle = async (): Promise<string> => {
+            if (isFetching && cachedCsv) return cachedCsv;
+            isFetching = true;
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 12000);
+              const response = await fetch(
+                "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000",
+                {
+                  signal: controller.signal,
+                  headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                  }
+                }
+              );
+              clearTimeout(timeoutId);
+              if (response.ok) {
+                const text = await response.text();
+                if (text && (text.includes("ASESOR") || text.includes('"ASESOR"'))) {
+                  cachedCsv = text;
+                  lastFetchTime = Date.now();
+                  try {
+                    fs.writeFileSync(cacheFilePath, text, 'utf8');
+                  } catch (e) {}
+                  return text;
+                }
+              }
+            } catch (err) {
+              console.warn('Google Sheets background sync warning:', err);
+            } finally {
+              isFetching = false;
+            }
+            return cachedCsv;
+          };
+
+          // Trigger immediate prefetch on dev server start
+          refreshFromGoogle().catch(() => {});
+
+          server.middlewares.use('/api/sheets', async (req, res) => {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', '*');
+            if (req.method === 'OPTIONS') {
+              res.statusCode = 204;
+              res.end();
+              return;
+            }
+
+            const url = req.url || '';
+            const force = url.includes('force=true');
+            const now = Date.now();
+
+            if (!force && cachedCsv && now - lastFetchTime < 25000) {
+              res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+              res.setHeader('X-Cache-Status', 'HIT');
+              res.end(cachedCsv);
+              return;
+            }
+
+            // If we have cached data but it is older than 25s, return cached immediately and refresh in background
+            if (!force && cachedCsv) {
+              res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+              res.setHeader('X-Cache-Status', 'STALE_WHILE_REVALIDATE');
+              res.end(cachedCsv);
+              refreshFromGoogle().catch(() => {});
+              return;
+            }
+
+            // Fresh fetch
+            const fresh = await refreshFromGoogle();
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('X-Cache-Status', 'MISS');
+            res.end(fresh || cachedCsv);
           });
         },
         configurePreviewServer(server) {
           server.middlewares.use('/brochures', handleBrochureRequest);
-          server.middlewares.use('/api/sheets', async (req, res) => {
-            try {
-              const response = await fetch("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z5000");
-              const csvText = await response.text();
-              res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-              res.end(csvText);
-            } catch (e) {
-              res.statusCode = 500;
-              res.end("Error fetching sheets");
+          
+          let cachedCsv = '';
+          const cacheFilePath = path.resolve(__dirname, '.sheets_cache.csv');
+          try {
+            if (fs.existsSync(cacheFilePath)) {
+              cachedCsv = fs.readFileSync(cacheFilePath, 'utf8');
             }
+          } catch (e) {}
+
+          let lastFetchTime = cachedCsv ? Date.now() : 0;
+          let isFetching = false;
+
+          const refreshFromGoogle = async (): Promise<string> => {
+            if (isFetching && cachedCsv) return cachedCsv;
+            isFetching = true;
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 12000);
+              const response = await fetch(
+                "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000",
+                {
+                  signal: controller.signal,
+                  headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                  }
+                }
+              );
+              clearTimeout(timeoutId);
+              if (response.ok) {
+                const text = await response.text();
+                if (text && (text.includes("ASESOR") || text.includes('"ASESOR"'))) {
+                  cachedCsv = text;
+                  lastFetchTime = Date.now();
+                  try {
+                    fs.writeFileSync(cacheFilePath, text, 'utf8');
+                  } catch (e) {}
+                  return text;
+                }
+              }
+            } catch (err) {
+              console.warn('Google Sheets preview sync warning:', err);
+            } finally {
+              isFetching = false;
+            }
+            return cachedCsv;
+          };
+
+          server.middlewares.use('/api/sheets', async (req, res) => {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', '*');
+            if (req.method === 'OPTIONS') {
+              res.statusCode = 204;
+              res.end();
+              return;
+            }
+
+            const url = req.url || '';
+            const force = url.includes('force=true');
+            const now = Date.now();
+
+            if (!force && cachedCsv && now - lastFetchTime < 25000) {
+              res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+              res.setHeader('X-Cache-Status', 'HIT');
+              res.end(cachedCsv);
+              return;
+            }
+
+            if (!force && cachedCsv) {
+              res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+              res.setHeader('X-Cache-Status', 'STALE_WHILE_REVALIDATE');
+              res.end(cachedCsv);
+              refreshFromGoogle().catch(() => {});
+              return;
+            }
+
+            const fresh = await refreshFromGoogle();
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('X-Cache-Status', 'MISS');
+            res.end(fresh || cachedCsv);
           });
         }
       }
