@@ -21,7 +21,7 @@ export interface SaleTransaction {
 
 export const STORAGE_KEY_SALES = "sales_data_db";
 export const STORAGE_KEY_CUSTOM_SALES = "custom_registered_sales_db";
-export const STORAGE_KEY_SALES_VERSION = "sales_data_v_2026_09_24_live_v3";
+export const STORAGE_KEY_SALES_VERSION = "sales_data_v_2026_09_24_live_v4";
 
 export function normalizeDateString(dateStr: string): string {
   if (!dateStr) return "";
@@ -272,19 +272,24 @@ export function calculateCurrentMonthTotals(sales: SaleTransaction[]) {
   const currentMonthStr = getCurrentMonthString();
   let up = 0;
   let fi = 0;
+  let upConIva = 0;
+  let fiConIva = 0;
   let countUp = 0;
   let countFi = 0;
 
   for (const s of sales) {
     if (matchMonth(s, currentMonthStr)) {
       const isUp = isUpContaSale(s);
-      // Strictly calculate Sin IVA matching DashboardModule exactly
-      const val = Number(s.totalSinIva) || (Number(s.total) ? Number(s.total) / 1.15 : 0) || 0;
+      // Strictly calculate Sin IVA and Con IVA
+      const val = Number(s.totalSinIva) || (Number(s.total) ? Number((s.total / 1.15).toFixed(2)) : 0) || 0;
+      const valConIva = Number(s.total) || 0;
       if (isUp) {
         up += val;
+        upConIva += valConIva;
         countUp++;
       } else {
         fi += val;
+        fiConIva += valConIva;
         countFi++;
       }
     }
@@ -294,8 +299,12 @@ export function calculateCurrentMonthTotals(sales: SaleTransaction[]) {
     upconta: up,
     firmas: fi,
     total: up + fi,
+    upcontaConIva: upConIva,
+    firmasConIva: fiConIva,
+    totalConIva: upConIva + fiConIva,
     countUp,
     countFi,
+    totalCount: countUp + countFi,
     monthLabel: getSpanishCurrentMonthLabel()
   };
 }

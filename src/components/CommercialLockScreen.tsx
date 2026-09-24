@@ -66,21 +66,12 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
 
   // Raw sales transactions for calculating metrics
   const [salesTransactions, setSalesTransactions] = useState<SaleTransaction[]>(() => getStoredSales());
+  const [ivaViewMode, setIvaViewMode] = useState<"sin_iva" | "con_iva">("sin_iva");
 
-  // Calculate initial totals strictly for the current month from stored sales
-  const initialCurrentMonth = calculateCurrentMonthTotals(salesTransactions);
-
-  const [salesTotals, setSalesTotals] = useState<{
-    upconta: number;
-    firmas: number;
-    total: number;
-    monthLabel: string;
-  }>({
-    upconta: initialCurrentMonth.upconta,
-    firmas: initialCurrentMonth.firmas,
-    total: initialCurrentMonth.total,
-    monthLabel: initialCurrentMonth.monthLabel || getSpanishCurrentMonthLabel()
-  });
+  // Dynamically calculate month totals (Sin IVA and Con IVA) strictly synced with salesTransactions
+  const salesTotals = useMemo(() => {
+    return calculateCurrentMonthTotals(salesTransactions);
+  }, [salesTransactions]);
 
   // Top 5 Productos más vendidos en Firmas y Sistemas (Mes Vigente)
   const topProductsCurrentMonth = useMemo(() => {
@@ -140,6 +131,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
     }> = {};
 
     let grandTotalMesSinIva = 0;
+    let grandTotalMesConIva = 0;
 
     salesTransactions.forEach((s) => {
       if (matchMonth(s, currentMonthStr)) {
@@ -168,6 +160,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
         map[rawName].totalConIva += conIva;
         map[rawName].ventasCount += 1;
         grandTotalMesSinIva += sinIva;
+        grandTotalMesConIva += conIva;
 
         if (isUp) {
           map[rawName].sistemasSinIva += sinIva;
@@ -183,24 +176,29 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
       let mainCat: "upconta" | "firmas" | "mixto" = "mixto";
       if (adv.sistemasCount > 0 && adv.firmasCount === 0) mainCat = "upconta";
       else if (adv.firmasCount > 0 && adv.sistemasCount === 0) mainCat = "firmas";
+      const totalAmount = ivaViewMode === "con_iva" ? adv.totalConIva : adv.totalSinIva;
+      const grandTotal = ivaViewMode === "con_iva" ? grandTotalMesConIva : grandTotalMesSinIva;
       return {
         ...adv,
         mainCategory: mainCat,
-        percentageOfTotal: grandTotalMesSinIva > 0 ? (adv.totalSinIva / grandTotalMesSinIva) * 100 : 0
+        percentageOfTotal: grandTotal > 0 ? (totalAmount / grandTotal) * 100 : 0
       };
     });
 
-    // Ordenar de mayor a menor por totalSinIva
-    list.sort((a, b) => b.totalSinIva - a.totalSinIva);
+    // Ordenar de mayor a menor según el modo seleccionado (Sin IVA o Con IVA)
+    list.sort((a, b) => (ivaViewMode === "con_iva" ? b.totalConIva - a.totalConIva : b.totalSinIva - a.totalSinIva));
 
-    const maxLeaderTotal = list.length > 0 ? list[0].totalSinIva : 1;
+    const maxLeaderTotal = list.length > 0
+      ? (ivaViewMode === "con_iva" ? list[0].totalConIva : list[0].totalSinIva)
+      : 1;
 
     return {
       list,
       maxLeaderTotal,
-      grandTotalMesSinIva
+      grandTotalMesSinIva,
+      grandTotalMesConIva
     };
-  }, [salesTransactions]);
+  }, [salesTransactions, ivaViewMode]);
 
   // Helper parser for Google Sheets CSV matching DashboardModule
   const parseCSVToTransactions = (text: string): SaleTransaction[] => {
@@ -303,18 +301,48 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
         }
       }
 
+      // 3. Try Google Visualization API (gviz)
+      if (!csvText) {
+        try {
+          const resGviz = await fetch(
+            "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/gviz/tq?tqx=out:csv&gid=0"
+          );
+          if (resGviz.ok) {
+            const t = await resGviz.text();
+            if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
+              csvText = t;
+            }
+          }
+        } catch (e) {
+          console.warn("Gviz fetch error:", e);
+        }
+      }
+
+      // 4. Try CORS proxies
+      if (!csvText) {
+        const proxies = [
+          "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000"),
+          "https://corsproxy.io/?" + encodeURIComponent("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000")
+        ];
+        for (const pUrl of proxies) {
+          try {
+            const resCors = await fetch(pUrl);
+            if (resCors.ok) {
+              const t = await resCors.text();
+              if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
+                csvText = t;
+                break;
+              }
+            }
+          } catch (e) {}
+        }
+      }
+
       if (csvText) {
         const parsed = parseCSVToTransactions(csvText);
         if (parsed.length > 0) {
           const merged = mergeRemoteSalesWithLocal(parsed);
-          const currentMonthTotals = calculateCurrentMonthTotals(merged);
           setSalesTransactions(merged);
-          setSalesTotals({
-            upconta: currentMonthTotals.upconta,
-            firmas: currentMonthTotals.firmas,
-            total: currentMonthTotals.total,
-            monthLabel: currentMonthTotals.monthLabel
-          });
           setLastSyncTime(new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
           return;
         }
@@ -322,14 +350,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
 
       // Safe fallback: use current stored sales
       const stored = getStoredSales();
-      const currentTotals = calculateCurrentMonthTotals(stored);
       setSalesTransactions(stored);
-      setSalesTotals({
-        upconta: currentTotals.upconta,
-        firmas: currentTotals.firmas,
-        total: currentTotals.total,
-        monthLabel: currentTotals.monthLabel
-      });
       setLastSyncTime(new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     } catch (err) {
       console.error("Error loading dashboard sales in home screen:", err);
@@ -350,14 +371,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
 
     const handleSalesUpdate = () => {
       const stored = getStoredSales();
-      const currentTotals = calculateCurrentMonthTotals(stored);
       setSalesTransactions(stored);
-      setSalesTotals({
-        upconta: currentTotals.upconta,
-        firmas: currentTotals.firmas,
-        total: currentTotals.total,
-        monthLabel: currentTotals.monthLabel
-      });
       setLastSyncTime(new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     };
 
@@ -530,10 +544,38 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono">
+                <div className="flex items-center gap-2.5">
+                  {/* Selector Sin IVA / Con IVA (Total Sheet) */}
+                  <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-700/80 text-[10px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setIvaViewMode("sin_iva")}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                        ivaViewMode === "sin_iva"
+                          ? "bg-emerald-500 text-slate-950 font-black shadow-sm"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                      title="Valores netos facturados sin IVA"
+                    >
+                      Sin IVA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIvaViewMode("con_iva")}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                        ivaViewMode === "con_iva"
+                          ? "bg-emerald-500 text-slate-950 font-black shadow-sm"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                      title="Valores con IVA (Columna TOTAL de Google Sheets)"
+                    >
+                      Con IVA (Sheets)
+                    </button>
+                  </div>
+
+                  <span className="hidden sm:inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span>Google Sheets En Vivo</span>
+                    <span>Sheets En Vivo</span>
                   </span>
                 </div>
               </div>
@@ -542,65 +584,96 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 
                 {/* 1. Ventas UpConta ERP */}
-                <div className="bg-slate-950/80 border border-orange-500/30 rounded-xl p-3.5 relative overflow-hidden">
+                <div className="bg-slate-950/80 border border-orange-500/30 rounded-xl p-3.5 relative overflow-hidden flex flex-col justify-between">
                   <div className="absolute top-0 left-0 bottom-0 w-1 bg-orange-500"></div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-orange-400" />
-                      <span className="text-[10px] text-slate-300 font-black uppercase tracking-wider">
-                        UpConta ERP
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-orange-400" />
+                        <span className="text-[10px] text-slate-300 font-black uppercase tracking-wider">
+                          UpConta ERP
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-orange-300 bg-orange-500/20 px-1.5 py-0.5 rounded font-mono">
+                        {topProductsCurrentMonth.totalUnidadesSistemas} u.
                       </span>
                     </div>
-                    <span className="text-[10px] font-bold text-orange-300 bg-orange-500/20 px-1.5 py-0.5 rounded font-mono">
-                      {topProductsCurrentMonth.totalUnidadesSistemas} u.
+                    <div className="text-lg sm:text-xl font-black text-orange-400 font-mono tracking-tight">
+                      ${(ivaViewMode === "con_iva" ? salesTotals.upcontaConIva : salesTotals.upconta).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-slate-900 flex items-center justify-between text-[10px] font-mono">
+                    <span className="text-orange-400/90 font-medium">
+                      {ivaViewMode === "con_iva" ? "Con IVA" : "Sin IVA"}
+                    </span>
+                    <span className="text-slate-500">
+                      {ivaViewMode === "con_iva"
+                        ? `Sin IVA: $${salesTotals.upconta.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : `Con IVA: $${salesTotals.upcontaConIva.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                     </span>
                   </div>
-                  <div className="text-lg sm:text-xl font-black text-orange-400 font-mono tracking-tight">
-                    ${salesTotals.upconta.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <span className="text-[10px] text-slate-500 font-medium">Facturación &amp; ERP</span>
                 </div>
 
                 {/* 2. Ventas Firmas Electrónicas ANF */}
-                <div className="bg-slate-950/80 border border-amber-500/30 rounded-xl p-3.5 relative overflow-hidden">
+                <div className="bg-slate-950/80 border border-amber-500/30 rounded-xl p-3.5 relative overflow-hidden flex flex-col justify-between">
                   <div className="absolute top-0 left-0 bottom-0 w-1 bg-amber-400"></div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <FileCheck className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="text-[10px] text-slate-300 font-black uppercase tracking-wider">
-                        Firmas ANF
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <FileCheck className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="text-[10px] text-slate-300 font-black uppercase tracking-wider">
+                          Firmas ANF
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded font-mono">
+                        {topProductsCurrentMonth.totalUnidadesFirmas} u.
                       </span>
                     </div>
-                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded font-mono">
-                      {topProductsCurrentMonth.totalUnidadesFirmas} u.
+                    <div className="text-lg sm:text-xl font-black text-amber-400 font-mono tracking-tight">
+                      ${(ivaViewMode === "con_iva" ? salesTotals.firmasConIva : salesTotals.firmas).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-slate-900 flex items-center justify-between text-[10px] font-mono">
+                    <span className="text-amber-400/90 font-medium">
+                      {ivaViewMode === "con_iva" ? "Con IVA" : "Sin IVA"}
+                    </span>
+                    <span className="text-slate-500">
+                      {ivaViewMode === "con_iva"
+                        ? `Sin IVA: $${salesTotals.firmas.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : `Con IVA: $${salesTotals.firmasConIva.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                     </span>
                   </div>
-                  <div className="text-lg sm:text-xl font-black text-amber-400 font-mono tracking-tight">
-                    ${salesTotals.firmas.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <span className="text-[10px] text-slate-500 font-medium">Token &amp; Archivo</span>
                 </div>
 
                 {/* 3. Gran Total Consolidado */}
-                <div className="bg-gradient-to-br from-emerald-950/70 to-slate-950 border border-emerald-500/40 rounded-xl p-3.5 relative overflow-hidden">
+                <div className="bg-gradient-to-br from-emerald-950/70 to-slate-950 border border-emerald-500/40 rounded-xl p-3.5 relative overflow-hidden flex flex-col justify-between">
                   <div className="absolute top-0 left-0 bottom-0 w-1 bg-emerald-400"></div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-[10px] text-emerald-300 font-black uppercase tracking-wider">
-                        Total Mes
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-[10px] text-emerald-300 font-black uppercase tracking-wider">
+                          Total Mes
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded font-mono">
+                        {salesTotals.totalCount} ops
                       </span>
                     </div>
-                    <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded font-mono">
-                      Sin IVA
+                    <div className="text-lg sm:text-xl font-black text-emerald-400 font-mono tracking-tight">
+                      ${(ivaViewMode === "con_iva" ? salesTotals.totalConIva : salesTotals.total).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-slate-900 flex items-center justify-between text-[10px] font-mono">
+                    <span className="text-emerald-400/90 font-bold">
+                      {ivaViewMode === "con_iva" ? "Con IVA (Total Sheet)" : "Sin IVA (Neto)"}
+                    </span>
+                    <span className="text-slate-400">
+                      {ivaViewMode === "con_iva"
+                        ? `Sin IVA: $${salesTotals.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : `Con IVA: $${salesTotals.totalConIva.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                     </span>
                   </div>
-                  <div className="text-lg sm:text-xl font-black text-emerald-400 font-mono tracking-tight">
-                    ${salesTotals.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <span className="text-[10px] text-slate-500 font-medium">
-                    {salesTransactions.filter(s => matchMonth(s, getCurrentMonthString())).length} operaciones
-                  </span>
                 </div>
 
               </div>
@@ -898,15 +971,17 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
                             </div>
                           </div>
 
-                          {/* Monto Sin IVA */}
+                          {/* Monto Asesor (Sin IVA y Con IVA) */}
                           <div className="shrink-0 text-right">
                             <div className={`text-xs sm:text-sm font-black font-mono ${
                               isFirst ? "text-amber-300" : isSecond ? "text-slate-200" : "text-emerald-400"
                             }`}>
-                              ${adv.totalSinIva.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              ${(ivaViewMode === "con_iva" ? adv.totalConIva : adv.totalSinIva).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
-                            <span className="text-[9px] text-slate-500 font-mono block">
-                              Sin IVA
+                            <span className="text-[9px] text-slate-400 font-mono block">
+                              {ivaViewMode === "con_iva"
+                                ? `Sin IVA: $${adv.totalSinIva.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : `Con IVA: $${adv.totalConIva.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                             </span>
                           </div>
                         </div>
@@ -919,7 +994,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
 
             <div className="mt-3 pt-2 border-t border-slate-800/80 text-[10px] text-slate-500 flex justify-between font-mono">
               <span>Auditoría de Ventas</span>
-              <span className="text-emerald-400">Total Sin IVA</span>
+              <span className="text-emerald-400 font-bold">{ivaViewMode === "con_iva" ? "Con IVA (Total Sheet)" : "Total Sin IVA (Neto)"}</span>
             </div>
           </div>
 

@@ -58,8 +58,8 @@ export default defineConfig(() => {
           let lastFetchTime = cachedCsv ? Date.now() : 0;
           let isFetching = false;
 
-          const refreshFromGoogle = async (): Promise<string> => {
-            if (isFetching && cachedCsv) return cachedCsv;
+          const refreshFromGoogle = async (force: boolean = false): Promise<string> => {
+            if (!force && isFetching && cachedCsv) return cachedCsv;
             isFetching = true;
             try {
               const controller = new AbortController();
@@ -110,14 +110,14 @@ export default defineConfig(() => {
             const force = url.includes('force=true');
             const now = Date.now();
 
-            if (!force && cachedCsv && now - lastFetchTime < 25000) {
+            if (!force && cachedCsv && now - lastFetchTime < 5000) {
               res.setHeader('Content-Type', 'text/csv; charset=utf-8');
               res.setHeader('X-Cache-Status', 'HIT');
               res.end(cachedCsv);
               return;
             }
 
-            // If we have cached data but it is older than 25s, return cached immediately and refresh in background
+            // If we have cached data but it is older than 5s, return cached immediately and refresh in background
             if (!force && cachedCsv) {
               res.setHeader('Content-Type', 'text/csv; charset=utf-8');
               res.setHeader('X-Cache-Status', 'STALE_WHILE_REVALIDATE');
@@ -127,7 +127,7 @@ export default defineConfig(() => {
             }
 
             // Fresh fetch
-            const fresh = await refreshFromGoogle();
+            const fresh = await refreshFromGoogle(force);
             res.setHeader('Content-Type', 'text/csv; charset=utf-8');
             res.setHeader('X-Cache-Status', 'MISS');
             res.end(fresh || cachedCsv);
@@ -147,8 +147,8 @@ export default defineConfig(() => {
           let lastFetchTime = cachedCsv ? Date.now() : 0;
           let isFetching = false;
 
-          const refreshFromGoogle = async (): Promise<string> => {
-            if (isFetching && cachedCsv) return cachedCsv;
+          const refreshFromGoogle = async (force: boolean = false): Promise<string> => {
+            if (!force && isFetching && cachedCsv) return cachedCsv;
             isFetching = true;
             try {
               const controller = new AbortController();
@@ -196,7 +196,7 @@ export default defineConfig(() => {
             const force = url.includes('force=true');
             const now = Date.now();
 
-            if (!force && cachedCsv && now - lastFetchTime < 25000) {
+            if (!force && cachedCsv && now - lastFetchTime < 5000) {
               res.setHeader('Content-Type', 'text/csv; charset=utf-8');
               res.setHeader('X-Cache-Status', 'HIT');
               res.end(cachedCsv);
@@ -211,7 +211,7 @@ export default defineConfig(() => {
               return;
             }
 
-            const fresh = await refreshFromGoogle();
+            const fresh = await refreshFromGoogle(force);
             res.setHeader('Content-Type', 'text/csv; charset=utf-8');
             res.setHeader('X-Cache-Status', 'MISS');
             res.end(fresh || cachedCsv);
