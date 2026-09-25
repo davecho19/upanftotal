@@ -46,6 +46,7 @@ import {
   getMonthFromDate, 
   SaleTransaction 
 } from "../utils/salesStorage";
+import { ProductSummaryTable } from "./ProductSummaryTable";
 export type { SaleTransaction };
 
 const COLORS = ["#0B2545", "#F97316", "#10B981", "#6366F1", "#8B5CF6", "#EC4899", "#14B8A6"];
@@ -337,7 +338,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   }, [selectedMonth]);
 
   // Sub tab view inside dashboard
-  const [activeViewTab, setActiveViewTab] = useState<"overview" | "producto" | "detalle">("overview");
+  const [activeViewTab, setActiveViewTab] = useState<"overview" | "producto" | "detalle" | "tabla_productos">("overview");
 
   // Dynamic week ranges for selected month
   const dynamicWeekRanges = useMemo(() => {
@@ -1507,6 +1508,18 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
           <Table className="w-4 h-4 text-blue-400" />
           <span>Detalle de Ventas ({filteredSales.length})</span>
         </button>
+
+        <button
+          onClick={() => setActiveViewTab("tabla_productos")}
+          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeViewTab === "tabla_productos"
+              ? "bg-[#0B2545] text-white shadow-md"
+              : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
+          }`}
+        >
+          <ShoppingBag className="w-4 h-4 text-amber-400" />
+          <span>Tabla Consolidada de Productos</span>
+        </button>
       </div>
 
       {/* ================= VIEW 1: OVERVIEW CHARTS ================= */}
@@ -2147,6 +2160,16 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
             </div>
           )}
         </div>
+      )}
+
+      {/* ================= VIEW 4: TABLA CONSOLIDADA DE PRODUCTOS (CANTIDAD, MONTO Y TICKET) ================= */}
+      {activeViewTab === "tabla_productos" && (
+        <ProductSummaryTable
+          sales={baseSales}
+          companyMode={companyMode}
+          allAdvisers={allAdvisers}
+          formatCurrency={formatCurrency}
+        />
       )}
     </div>
   );
