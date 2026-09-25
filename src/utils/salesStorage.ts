@@ -21,7 +21,7 @@ export interface SaleTransaction {
 
 export const STORAGE_KEY_SALES = "sales_data_db";
 export const STORAGE_KEY_CUSTOM_SALES = "custom_registered_sales_db";
-export const STORAGE_KEY_SALES_VERSION = "sales_data_v_2026_09_24_live_v4";
+export const STORAGE_KEY_SALES_VERSION = "sales_data_v_2026_09_25_live_v7_audit";
 
 export function normalizeDateString(dateStr: string): string {
   if (!dateStr) return "";
@@ -81,6 +81,16 @@ function isSameSale(a: SaleTransaction, b: SaleTransaction): boolean {
 
 export function getStoredSales(): SaleTransaction[] {
   try {
+    const storedVersion = localStorage.getItem(STORAGE_KEY_SALES_VERSION);
+    if (storedVersion !== STORAGE_KEY_SALES_VERSION) {
+      try {
+        localStorage.removeItem(STORAGE_KEY_SALES);
+        localStorage.removeItem(STORAGE_KEY_CUSTOM_SALES);
+        localStorage.setItem(STORAGE_KEY_SALES_VERSION, STORAGE_KEY_SALES_VERSION);
+      } catch (e) {}
+      return [...INITIAL_OFFLINE_SALES.slice(0, 10000)];
+    }
+
     let customSales: SaleTransaction[] = [];
     const customRaw = localStorage.getItem(STORAGE_KEY_CUSTOM_SALES);
     if (customRaw) {
@@ -92,9 +102,8 @@ export function getStoredSales(): SaleTransaction[] {
 
     let baseSales: SaleTransaction[] = [];
     const baseRaw = localStorage.getItem(STORAGE_KEY_SALES);
-    const storedVersion = localStorage.getItem(STORAGE_KEY_SALES_VERSION);
 
-    if (baseRaw && storedVersion === STORAGE_KEY_SALES_VERSION) {
+    if (baseRaw) {
       try {
         const parsed = JSON.parse(baseRaw);
         if (Array.isArray(parsed) && parsed.length >= INITIAL_OFFLINE_SALES.length) {
@@ -169,35 +178,16 @@ export function saveCustomRegisteredSale(sale: SaleTransaction): void {
 
 export function mergeRemoteSalesWithLocal(remoteSales: SaleTransaction[]): SaleTransaction[] {
   try {
-    let customSales: SaleTransaction[] = [];
-    const customRaw = localStorage.getItem(STORAGE_KEY_CUSTOM_SALES);
-    if (customRaw) {
-      try {
-        const parsed = JSON.parse(customRaw);
-        if (Array.isArray(parsed)) customSales = parsed;
-      } catch (e) {}
+    if (!remoteSales || remoteSales.length === 0) {
+      return getStoredSales();
     }
 
-    if (customSales.length === 0) {
-      const slice10000 = remoteSales.slice(0, 10000);
-      try {
-        localStorage.setItem(STORAGE_KEY_SALES, JSON.stringify(slice10000));
-        localStorage.setItem(STORAGE_KEY_SALES_VERSION, STORAGE_KEY_SALES_VERSION);
-      } catch (e) {}
-      return slice10000;
-    }
-
-    const merged = [...customSales];
-    for (const rem of remoteSales) {
-      if (!customSales.some(c => isSameSale(c, rem))) {
-        merged.push(rem);
-      }
-    }
-
-    const slice10000 = merged.slice(0, 10000);
+    const slice10000 = remoteSales.slice(0, 10000);
     try {
       localStorage.setItem(STORAGE_KEY_SALES, JSON.stringify(slice10000));
       localStorage.setItem(STORAGE_KEY_SALES_VERSION, STORAGE_KEY_SALES_VERSION);
+      // Remove stale test sales to prevent ghost sales from inflating advisor totals
+      localStorage.removeItem(STORAGE_KEY_CUSTOM_SALES);
     } catch (e) {}
     return slice10000;
   } catch (e) {
