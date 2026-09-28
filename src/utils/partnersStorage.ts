@@ -60,45 +60,26 @@ export const INITIAL_SOCIOS: string[] = [
 ];
 
 export const INITIAL_DISTRIBUIDORES: string[] = [
-  "ALEGRIA VELASQUEZ VILMA STEFANIE",
-  "ALMACHI ZURITA CESAR DAVID",
-  "ATUPAÑA CORO PATRICIO FERNANDO",
-  "BYRON GERARDO DAQUILEMA MOROCHO",
-  "CABEZAS SOTO JEFFERSON ALEXANDER",
-  "CERON CHAFUELAN DINA AMPARO",
-  "DELGADO CUSME DIEGO ARMANDO",
-  "DIANA PAULİNA ZURİTA TORRES",
-  "Diego Giovanni Anrango Anrango",
-  "FABIAN DANIEL RAMOS VARGAS",
-  "FIERRO ZAPATA JOSELYN LIZBETH",
-  "GALARZA TOBAR ANTONIO JOSE",
-  "GARCIA REYES SANDY ESTEFANIA",
-  "GS CONTADORES S.A.S.",
-  "KARLA DAYANNA HARO MORENO",
-  "KINETIC TECH SERVICES",
-  "MARIA DANIELA LOPEZ MOLINA",
-  "MEGASYSTEMS S.A.S.",
-  "MELISSA IVONNE VÉLEZ MUENTES",
-  "MORA GUEVARA BRYAN ISRAEL",
-  "MOROCHO PINTAG RUTH ABIGAIL",
-  "Nancy Carmita Duchi Ushca",
-  "NELSON SANTIAGO CAISA GUALPA",
-  "NUCLEO CONSULTORA S.A.S.",
-  "ORELLANA BENAVIDES REINA MARIBEL",
-  "RIVERA LINO JOSE LUIS",
-  "SANCHEZ GARCIA WILSON ANDRES",
-  "SEGUNDA MERA",
-  "SERRANO RIVERA MARTIN ANDRES",
-  "Silvana del Rocio Quillupangui Álvarez",
-  "SONIA RUTH SANJINEZ CAICEDO",
-  "TORRES GUAYACONDO JESSICA MICHELLE",
-  "TUZA SIGCHA GEOVANNA PILAR",
-  "VARELA PERALTA BETTY LUCIOLA",
-  "VEINTIMILLA PADILLA ADRIAN FERNANDO"
+  "BAZURTO QUINAPALLO JESSICA LISSETTE",
+  "CRUZ ARBOLEDA VICTOR MANUEL",
+  "DIEGO MANUEL ESPINOSA RIVERA",
+  "ELITEACCOUNTING S.A.S.",
+  "ELIZABETH DANIELA TELLO PORTOCARRERO",
+  "GARZON RUIZ DANNY NAYARITH",
+  "GRIJALVA LASTRA SANTIAGO LEONARDO",
+  "HEREDIA AYALA ALBERTO JOSUE",
+  "HERRERA GONZALEZ DARIO JAVIER",
+  "PARDO JIMENEZ GERMANIA ELIZABETH",
+  "SANCHEZ YANEZ NEIVER ALEJANDRINO",
+  "MEDINA GOMEZ RODOLFO ALEJANDRO",
+  "MEJIA TOLEDO KATIA DE LAS MERCEDES",
+  "MORILLO TONGUINO EDISON FERNANDO",
+  "TOSCANO ALEJANDRO",
+  "CUEVA VERONICA"
 ];
 
 const STORAGE_KEY_SOCIOS = "upconta_socios_list_v2";
-const STORAGE_KEY_DISTRIBUIDORES = "upconta_distribuidores_list_v2";
+const STORAGE_KEY_DISTRIBUIDORES = "upconta_distribuidores_list_v3";
 
 export function getStoredSocios(): string[] {
   try {
@@ -180,12 +161,11 @@ export async function fetchRemoteDistribuidores(): Promise<string[]> {
         }
       }
       if (names.length > 0) {
-        const stored = getStoredDistribuidores();
-        const merged = Array.from(new Set<string>([...names, ...stored]));
         try {
-          localStorage.setItem(STORAGE_KEY_DISTRIBUIDORES, JSON.stringify(merged));
+          localStorage.setItem(STORAGE_KEY_DISTRIBUIDORES, JSON.stringify(names));
+          localStorage.removeItem("upconta_distribuidores_list_v2");
         } catch (e) {}
-        return merged;
+        return names;
       }
     }
   } catch (e) {

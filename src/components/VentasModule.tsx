@@ -615,17 +615,19 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
             Sincronización en vivo con Google Sheets (Pestañas: <strong>GENERAL</strong>, <strong>SOCIOS</strong> y <strong>DISTRIBUIDORES</strong>)
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowScriptModal(true)}
-          className="text-xs font-black text-orange-700 hover:text-orange-900 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-        >
-          <span>⚙️ Actualizar Script Google Sheets (Columna O)</span>
-        </button>
+        {accessProfile === "180890" && (
+          <button
+            type="button"
+            onClick={() => setShowScriptModal(true)}
+            className="text-xs font-black text-orange-700 hover:text-orange-900 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+          >
+            <span>⚙️ Actualizar Script Google Sheets (Columna O)</span>
+          </button>
+        )}
       </div>
 
       {/* Modal con instrucciones y código Apps Script para Columna O, Socios y Distribuidores */}
-      {showScriptModal && (
+      {showScriptModal && accessProfile === "180890" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
