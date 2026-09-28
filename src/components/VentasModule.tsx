@@ -17,14 +17,26 @@ import {
   Layers,
   HelpCircle,
   Clock,
-  Award
+  Award,
+  Handshake
 } from "lucide-react";
 import { UpContaLogo, AnfLogo, CoBrandLogo } from "./GodiLogo";
 import { INITIAL_OFFLINE_SALES } from "../salesData";
 import { saveCustomRegisteredSale, SaleTransaction, getMonthFromDate, normalizeDateString } from "../utils/salesStorage";
+import {
+  getStoredSocios,
+  getStoredDistribuidores,
+  saveNewSocio,
+  saveNewDistribuidor,
+  fetchRemoteSocios,
+  fetchRemoteDistribuidores,
+  APPS_SCRIPT_SOURCE_CODE,
+  getSheetWebAppUrl,
+  setSheetWebAppUrl
+} from "../utils/partnersStorage";
 
 // Google Apps Script WebApp Endpoint URL
-const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwRz2QlL1JYjPI8jpEkWbJWXJ4C-XjldZPx1Jp1_BhVf4ZTsa48epbJN-wnhIwW0bhV/exec";
+const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwN0DLNum5dfWe9CIUNaxwPjpjplh48HNdBjDR9GC-Tr32UFyo0jyq19tCJIGQpqMkv/exec";
 
 // IVA factor for adicionales (1.15 = 15% IVA)
 const IVA_FACTOR = 1.15;
@@ -225,7 +237,57 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
   const [fecha, setFecha] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [asesor, setAsesor] = useState<string>("");
   const [productoKey, setProductoKey] = useState<string>("");
-  const [tipoVenta, setTipoVenta] = useState<"Nuevo" | "Renovación" | "Upseling">("Nuevo");
+  const [tipoVenta, setTipoVenta] = useState<"Nuevo" | "Renovación" | "Socio" | "Distribuidor" | "Upseling">("Nuevo");
+
+  // Socio y Distribuidor solo permitidos en UpConta
+  const isUpcontaPartnerAllowed =
+    mode === "upconta" ||
+    companyMode === "upconta" ||
+    ["facturacion", "erp", "contador"].includes(productoKey);
+
+  // Socio / Distribuidor Selection State
+  const [selectedPartner, setSelectedPartner] = useState<string>("");
+  const [sociosList, setSociosList] = useState<string[]>(() => getStoredSocios());
+  const [distribuidoresList, setDistribuidoresList] = useState<string[]>(() => getStoredDistribuidores());
+  const [isCreatingNewPartner, setIsCreatingNewPartner] = useState<boolean>(false);
+  const [newPartnerName, setNewPartnerName] = useState<string>("");
+  const [isSavingPartner, setIsSavingPartner] = useState<boolean>(false);
+  const [showScriptModal, setShowScriptModal] = useState<boolean>(false);
+  const [copiedScript, setCopiedScript] = useState<boolean>(false);
+  const [webappUrlInput, setWebappUrlInput] = useState<string>(() => getSheetWebAppUrl());
+  const [isTestingUrl, setIsTestingUrl] = useState<boolean>(false);
+  const [urlTestResult, setUrlTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    // Sincronizar listas desde las pestañas de Google Sheet al cargar
+    fetchRemoteSocios().then(list => {
+      if (list && list.length > 0) setSociosList(list);
+    });
+    fetchRemoteDistribuidores().then(list => {
+      if (list && list.length > 0) setDistribuidoresList(list);
+    });
+
+    const handleSociosUpdated = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) setSociosList(e.detail);
+    };
+    const handleDistUpdated = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) setDistribuidoresList(e.detail);
+    };
+
+    window.addEventListener("socios_updated", handleSociosUpdated);
+    window.addEventListener("distribuidores_updated", handleDistUpdated);
+    return () => {
+      window.removeEventListener("socios_updated", handleSociosUpdated);
+      window.removeEventListener("distribuidores_updated", handleDistUpdated);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isUpcontaPartnerAllowed && (tipoVenta === "Socio" || tipoVenta === "Distribuidor")) {
+      setTipoVenta("Nuevo");
+      setSelectedPartner("");
+    }
+  }, [isUpcontaPartnerAllowed, tipoVenta]);
 
   // Upseling solo permitido en el perfil de firmas con clave 1998 o 123456
   const isFirmasUpselingAllowed =
@@ -382,12 +444,23 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
       return;
     }
 
+    if ((tipoVenta === "Socio" || tipoVenta === "Distribuidor") && !selectedPartner.trim()) {
+      setStatusMessage({
+        type: "error",
+        text: `Por favor selecciona o crea un ${tipoVenta} de la lista oficial.`
+      });
+      return;
+    }
+
     const adicionalesTexto = adicionales.map(a => `${a.nombre} x${a.cantidad}`).join(", ");
     const finalTipoVenta = showTipoVentaPlan || showTipoVentaAdicionales || mode === "firmas" ? tipoVenta : "";
+    const partnerName = (tipoVenta === "Socio" || tipoVenta === "Distribuidor") ? selectedPartner.trim() : "";
+    const cleanDate = normalizeDateString(fecha || new Date().toISOString().split("T")[0]);
+    const mesCalculado = getMonthFromDate(cleanDate);
 
     const payload = {
       asesor: ASESORES[asesor] || asesor,
-      fecha: fecha,
+      fecha: cleanDate,
       ruc: ruc,
       nombre: nombre,
       producto: PRODUCTOS[productoKey]?.label || productoKey,
@@ -398,6 +471,13 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
       descuento: descuento,
       total: totalInvertir,
       tipoVenta: finalTipoVenta,
+      tipo: finalTipoVenta,
+      mes: mesCalculado,
+      "SOCIO / DISTRIBUIDOR": partnerName,
+      socioDistribuidor: partnerName,
+      socio_distribuidor: partnerName,
+      socio: partnerName,
+      distribuidor: partnerName,
     };
 
     setIsSubmitting(true);
@@ -406,7 +486,8 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
       const params = new URLSearchParams();
       Object.entries(payload).forEach(([k, v]) => params.append(k, String(v)));
 
-      await fetch(SHEET_WEBAPP_URL + "?" + params.toString(), {
+      const activeWebappUrl = getSheetWebAppUrl();
+      await fetch(activeWebappUrl + "?" + params.toString(), {
         method: "GET",
         mode: "no-cors",
       });
@@ -430,7 +511,8 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
           descuento: Number(descuento) || 0,
           total: Number(totalInvertir) || 0,
           totalSinIva: Number((totalInvertir / 1.15).toFixed(2)),
-          mes: mesCalculado
+          mes: mesCalculado,
+          socioDistribuidor: partnerName
         };
 
         saveCustomRegisteredSale(newSaleItem);
@@ -449,6 +531,9 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
       setDescuento(0);
       setAdicionales([]);
       setFecha(new Date().toISOString().split("T")[0]);
+      setSelectedPartner("");
+      setIsCreatingNewPartner(false);
+      setNewPartnerName("");
     } catch (err) {
       console.error(err);
       setStatusMessage({
@@ -460,10 +545,195 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
     }
   };
 
+  const handleSaveAndSelectNewPartner = async () => {
+    if (!newPartnerName.trim()) return;
+    setIsSavingPartner(true);
+    try {
+      const name = newPartnerName.trim().toUpperCase();
+      if (tipoVenta === "Socio") {
+        const updated = await saveNewSocio(name);
+        setSociosList(updated);
+        setSelectedPartner(name);
+      } else {
+        const updated = await saveNewDistribuidor(name);
+        setDistribuidoresList(updated);
+        setSelectedPartner(name);
+      }
+      setIsCreatingNewPartner(false);
+      setNewPartnerName("");
+    } catch (err) {
+      console.error("Error creating partner:", err);
+    } finally {
+      setIsSavingPartner(false);
+    }
+  };
+
+  const handleSaveWebappUrl = () => {
+    if (webappUrlInput.trim()) {
+      setSheetWebAppUrl(webappUrlInput.trim());
+      setUrlTestResult({ success: true, message: "URL actualizada exitosamente en el sistema." });
+    }
+  };
+
+  const handleTestWebappUrl = async () => {
+    setIsTestingUrl(true);
+    setUrlTestResult(null);
+    try {
+      const url = webappUrlInput.trim() || getSheetWebAppUrl();
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data && data.status === "ok") {
+        setUrlTestResult({
+          success: true,
+          message: `¡Conexión verificada! Hoja vinculada: ${data.hoja || "GENERAL"}. Destino: fila ${data.filaDestino || ""}`
+        });
+      } else {
+        setUrlTestResult({
+          success: false,
+          message: "El servidor respondió pero no devolvió el formato esperado."
+        });
+      }
+    } catch (err: any) {
+      setUrlTestResult({
+        success: false,
+        message: "No se pudo conectar con la WebApp. Verifica que en Google Apps Script esté configurado 'Quién tiene acceso: Cualquier usuario' (Anyone)."
+      });
+    } finally {
+      setIsTestingUrl(false);
+    }
+  };
+
   const listaAdicionalesOpciones = productoKey === "contador" ? [...ADICIONALES_BASE, ...ADICIONALES_CONTADOR] : ADICIONALES_BASE;
 
   return (
     <div className="space-y-6 animate-fade-in max-w-6xl mx-auto">
+      {/* Top Helper Bar for Google Sheets synchronization */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-xs font-bold text-slate-700">
+            Sincronización en vivo con Google Sheets (Pestañas: <strong>GENERAL</strong>, <strong>SOCIOS</strong> y <strong>DISTRIBUIDORES</strong>)
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowScriptModal(true)}
+          className="text-xs font-black text-orange-700 hover:text-orange-900 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+        >
+          <span>⚙️ Actualizar Script Google Sheets (Columna O)</span>
+        </button>
+      </div>
+
+      {/* Modal con instrucciones y código Apps Script para Columna O, Socios y Distribuidores */}
+      {showScriptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <span>⚙️ Código de Apps Script para Google Sheets</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Habilita la Columna O (SOCIO / DISTRIBUIDOR) y el guardado en las pestañas SOCIOS y DISTRIBUIDORES
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowScriptModal(false)}
+                className="text-slate-400 hover:text-slate-700 font-bold p-1 rounded-lg text-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 space-y-1">
+              <strong className="block font-black">Pasos para actualizar tu Google Sheet (1 minuto):</strong>
+              <ol className="list-decimal pl-4 space-y-1 font-medium">
+                <li>En tu Google Sheet ve al menú superior: <strong>Extensiones &gt; Apps Script</strong>.</li>
+                <li>Reemplaza todo el contenido del archivo con el código de abajo.</li>
+                <li>Haz clic en el botón <strong>Guardar (ícono de disco)</strong>.</li>
+                <li>Haz clic en <strong>Implementar &gt; Administrar implementaciones</strong>, pulsa el <strong>ícono de lápiz (Editar)</strong>, en Versión selecciona <strong>Nueva versión</strong> y haz clic en <strong>Implementar</strong>.</li>
+                <li>Si creaste una nueva implementación y cambió la URL de la WebApp, puedes pegarla aquí abajo para vincularla de inmediato.</li>
+              </ol>
+            </div>
+
+            {/* URL Configuration Input & Tester */}
+            <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl space-y-2">
+              <label className="text-xs font-black text-slate-800 flex items-center justify-between">
+                <span>URL Activa de la WebApp de Google Sheets:</span>
+                <span className="text-[10px] text-slate-500 font-normal">Termina en /exec</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={webappUrlInput}
+                  onChange={(e) => setWebappUrlInput(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-800 focus:outline-none focus:border-orange-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveWebappUrl}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-black transition-colors cursor-pointer"
+                >
+                  Guardar URL
+                </button>
+                <button
+                  type="button"
+                  disabled={isTestingUrl}
+                  onClick={handleTestWebappUrl}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-black transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  {isTestingUrl ? "Probando..." : "Probar Conexión"}
+                </button>
+              </div>
+
+              {urlTestResult && (
+                <div
+                  className={`p-2 rounded-lg text-xs font-bold border ${
+                    urlTestResult.success
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                      : "bg-rose-50 text-rose-800 border-rose-300"
+                  }`}
+                >
+                  {urlTestResult.message}
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-hidden flex flex-col space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-black text-slate-700">Código Google Apps Script (doGet):</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(APPS_SCRIPT_SOURCE_CODE);
+                    setCopiedScript(true);
+                    setTimeout(() => setCopiedScript(false), 3000);
+                  }}
+                  className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-black transition-colors cursor-pointer shadow-xs"
+                >
+                  {copiedScript ? "¡Copiado al Portapapeles! ✓" : "Copiar Código"}
+                </button>
+              </div>
+              <pre className="bg-slate-900 text-slate-100 p-3.5 rounded-xl text-[11px] font-mono overflow-auto flex-1 border border-slate-800 select-all">
+                {APPS_SCRIPT_SOURCE_CODE}
+              </pre>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowScriptModal(false)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-colors cursor-pointer"
+              >
+                Entendido / Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Status Message Banner if present */}
       {statusMessage && (
         <div
@@ -676,6 +946,40 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
                     />
                     <span>Renovación</span>
                   </label>
+                  {isUpcontaPartnerAllowed && (
+                    <label className="inline-flex items-center gap-2 font-bold text-sm text-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="tipoVentaRadio"
+                        value="Socio"
+                        checked={tipoVenta === "Socio"}
+                        onChange={() => {
+                          setTipoVenta("Socio");
+                          setSelectedPartner("");
+                          setIsCreatingNewPartner(false);
+                        }}
+                        className="text-orange-600 focus:ring-orange-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span>Socio</span>
+                    </label>
+                  )}
+                  {isUpcontaPartnerAllowed && (
+                    <label className="inline-flex items-center gap-2 font-bold text-sm text-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="tipoVentaRadio"
+                        value="Distribuidor"
+                        checked={tipoVenta === "Distribuidor"}
+                        onChange={() => {
+                          setTipoVenta("Distribuidor");
+                          setSelectedPartner("");
+                          setIsCreatingNewPartner(false);
+                        }}
+                        className="text-orange-600 focus:ring-orange-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span>Distribuidor</span>
+                    </label>
+                  )}
                   {isFirmasUpselingAllowed && (
                     <label className="inline-flex items-center gap-2 font-bold text-sm text-slate-800 cursor-pointer">
                       <input
@@ -683,7 +987,11 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
                         name="tipoVentaRadio"
                         value="Upseling"
                         checked={tipoVenta === "Upseling"}
-                        onChange={() => setTipoVenta("Upseling")}
+                        onChange={() => {
+                          setTipoVenta("Upseling");
+                          setSelectedPartner("");
+                          setIsCreatingNewPartner(false);
+                        }}
                         className="text-orange-600 focus:ring-orange-500 w-4 h-4 cursor-pointer"
                       />
                       <span className="flex items-center gap-1.5">
@@ -695,6 +1003,115 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
                     </label>
                   )}
                 </div>
+
+                {/* Desplegable de Socios / Distribuidores */}
+                {(tipoVenta === "Socio" || tipoVenta === "Distribuidor") && (
+                  <div className="mt-3.5 p-4 bg-orange-50/90 border-2 border-orange-200 rounded-2xl space-y-3">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                      <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                        {tipoVenta === "Socio" ? (
+                          <Handshake className="w-4 h-4 text-orange-600" />
+                        ) : (
+                          <Building className="w-4 h-4 text-orange-600" />
+                        )}
+                        <span>
+                          {tipoVenta === "Socio" ? "Listado Oficial de Socios *" : "Listado Oficial de Distribuidores *"}
+                        </span>
+                      </label>
+
+                      {!isCreatingNewPartner && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreatingNewPartner(true);
+                            setNewPartnerName("");
+                          }}
+                          className="px-2.5 py-1 text-xs font-black text-orange-800 bg-orange-200/80 hover:bg-orange-200 rounded-lg border border-orange-300 transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>+ Crear Nuevo {tipoVenta}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {!isCreatingNewPartner ? (
+                      <div className="space-y-2">
+                        <select
+                          value={selectedPartner}
+                          onChange={(e) => {
+                            if (e.target.value === "__NEW__") {
+                              setIsCreatingNewPartner(true);
+                              setNewPartnerName("");
+                            } else {
+                              setSelectedPartner(e.target.value);
+                            }
+                          }}
+                          className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-bold text-xs focus:bg-white focus:border-orange-500 shadow-2xs"
+                        >
+                          <option value="">
+                            -- Selecciona un {tipoVenta} ({tipoVenta === "Socio" ? sociosList.length : distribuidoresList.length} disponibles) --
+                          </option>
+                          {(tipoVenta === "Socio" ? sociosList : distribuidoresList).map((item, idx) => (
+                            <option key={idx} value={item}>
+                              {item}
+                            </option>
+                          ))}
+                          <option value="__NEW__">➕ Crear y agregar nuevo {tipoVenta}...</option>
+                        </select>
+
+                        {selectedPartner ? (
+                          <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-900 flex items-center justify-between">
+                            <span>
+                              Seleccionado: <strong className="text-slate-900 font-black">{selectedPartner}</strong>
+                            </span>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+                              Columna: SOCIO / DISTRIBUIDOR
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] font-semibold text-amber-800">
+                            * Se registrará en la columna <strong>SOCIO / DISTRIBUIDOR</strong> de Google Sheets y en los reportes locales.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-white border border-orange-300 p-3.5 rounded-xl space-y-2.5 shadow-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-900">
+                            Crear Nuevo {tipoVenta} (se agregará a la pestaña {tipoVenta === "Socio" ? "socios" : "distribuidor"} de Google Sheets):
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setIsCreatingNewPartner(false)}
+                            className="text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+                          >
+                            ✕ Cancelar
+                          </button>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            placeholder={`Nombre completo del nuevo ${tipoVenta}...`}
+                            value={newPartnerName}
+                            onChange={(e) => setNewPartnerName(e.target.value)}
+                            className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold text-xs uppercase focus:bg-white focus:border-orange-500"
+                          />
+                          <button
+                            type="button"
+                            disabled={isSavingPartner || !newPartnerName.trim()}
+                            onClick={handleSaveAndSelectNewPartner}
+                            className="bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-black text-xs px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            {isSavingPartner ? "Guardando..." : "Guardar y Seleccionar"}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-500">
+                          Se agregará inmediatamente al listado local y se sincronizará con la pestaña {tipoVenta === "Socio" ? "socios" : "distribuidor"} de Google Sheets.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

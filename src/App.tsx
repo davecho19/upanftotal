@@ -52,8 +52,10 @@ import {
   MessageSquare,
   Youtube,
   Eye,
-  X
+  X,
+  RefreshCw
 } from "lucide-react";
+import { syncAllGoogleSheetsData } from "./utils/partnersStorage";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   PLANES_DATA, 
@@ -256,6 +258,24 @@ export default function App() {
 
   // Modal for previewing official flyer images
   const [previewImageModal, setPreviewImageModal] = useState<{ url: string; title: string; downloadFileName?: string } | null>(null);
+
+  // Google Sheets global synchronization state
+  const [isSyncingSheets, setIsSyncingSheets] = useState<boolean>(false);
+  const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
+
+  const handleSyncGoogleSheets = async () => {
+    setIsSyncingSheets(true);
+    try {
+      const result = await syncAllGoogleSheetsData();
+      setSyncToastMessage(`¡Google Sheets sincronizado! (${result.sociosCount} socios, ${result.distCount} distribuidores y ventas al día)`);
+      setTimeout(() => setSyncToastMessage(null), 4000);
+    } catch (err) {
+      setSyncToastMessage("Error al conectar con Google Sheets. Intenta nuevamente.");
+      setTimeout(() => setSyncToastMessage(null), 4000);
+    } finally {
+      setIsSyncingSheets(false);
+    }
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -2678,6 +2698,25 @@ export default function App() {
                       Anual
                     </span>
                   </button>
+                </div>
+              )}
+
+              {/* Botón de sincronización con Google Sheets al lado del perfil */}
+              <button
+                onClick={handleSyncGoogleSheets}
+                disabled={isSyncingSheets}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-black transition-all shadow-2xs cursor-pointer disabled:opacity-50 shrink-0"
+                title="Sincronizar toda la data de Google Sheets (Socios, Distribuidores y Ventas)"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isSyncingSheets ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">{isSyncingSheets ? "Sincronizando..." : "Sincronizar Sheets"}</span>
+              </button>
+
+              {/* Toast de confirmación de sincronización */}
+              {syncToastMessage && (
+                <div className="fixed top-20 right-4 z-50 bg-slate-900 text-emerald-400 px-4 py-2.5 rounded-2xl shadow-2xl border border-emerald-500/50 text-xs font-bold flex items-center gap-2 animate-fade-in backdrop-blur-sm">
+                  <span className="text-emerald-400">✓</span>
+                  <span className="text-white">{syncToastMessage}</span>
                 </div>
               )}
 

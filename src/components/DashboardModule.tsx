@@ -47,6 +47,7 @@ import {
   SaleTransaction 
 } from "../utils/salesStorage";
 import { ProductSummaryTable } from "./ProductSummaryTable";
+import { ProductModalitiesTables } from "./ProductModalitiesTables";
 export type { SaleTransaction };
 
 const COLORS = ["#0B2545", "#F97316", "#10B981", "#6366F1", "#8B5CF6", "#EC4899", "#14B8A6"];
@@ -517,7 +518,8 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
           descuento,
           total,
           totalSinIva,
-          mes
+          mes,
+          socioDistribuidor: cols[14] ? cols[14].trim() : ""
         });
       }
     }
@@ -2068,6 +2070,13 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
               </tfoot>
             </table>
           </div>
+
+          {/* ================= 2 TABLAS CONSOLIDADAS Y ESPECÍFICAS: NUEVAS, RENOVACIÓN Y SOCIO ================= */}
+          <ProductModalitiesTables
+            sales={filteredSales}
+            formatCurrency={formatCurrency}
+            companyMode={companyMode}
+          />
         </div>
       )}
 

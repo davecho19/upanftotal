@@ -259,7 +259,8 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
           descuento,
           total,
           totalSinIva,
-          mes
+          mes,
+          socioDistribuidor: cols[14] ? cols[14].trim() : ""
         });
       }
     }

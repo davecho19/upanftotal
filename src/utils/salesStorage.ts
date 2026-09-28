@@ -15,6 +15,7 @@ export interface SaleTransaction {
   total: number;
   totalSinIva: number;
   mes: string;
+  socioDistribuidor?: string;
   id?: string;
   isCustom?: boolean;
 }
