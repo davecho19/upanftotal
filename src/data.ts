@@ -229,7 +229,7 @@ export interface FirmaElectronica {
 
 export const FIRMAS_DATA: FirmaElectronica[] = [
   // Persona Natural
-  { tipo: "PERSONA NATURAL", vigencia: "15 DIAS", precio: 6.90 },
+  { tipo: "PERSONA NATURAL", vigencia: "15 DIAS", precio: 4.49 },
   { tipo: "PERSONA NATURAL", vigencia: "1 AÑO", precio: 18.20 },
   { tipo: "PERSONA NATURAL", vigencia: "2 AÑOS", precio: 22.20 },
   { tipo: "PERSONA NATURAL", vigencia: "3 AÑOS", precio: 33.28 },

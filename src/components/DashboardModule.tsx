@@ -347,15 +347,15 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   }, [selectedMonth]);
 
   // Fetch Google Sheets Data
-  const fetchGoogleSheetData = async (force: boolean = false) => {
+  const fetchGoogleSheetData = async (force: boolean = true) => {
     setIsLoading(true);
     setSyncStatus("loading");
     try {
       let csvText = "";
       
-      // Attempt 1: Local server proxy (instant cache + force query option)
+      // Attempt 1: Local server proxy (instant live proxy with cache-busting)
       try {
-        const resProxy = await fetch(`/api/sheets?t=${Date.now()}${force ? "&force=true" : ""}`);
+        const resProxy = await fetch(`/api/sheets?t=${Date.now()}&force=true`, { cache: "no-store" });
         if (resProxy.ok) {
           const t = await resProxy.text();
           if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
@@ -366,11 +366,11 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         console.warn("Proxy fetch skipped/failed:", e);
       }
 
-      // Attempt 2: Direct Google Sheets export URL
+      // Attempt 2: Direct Google Sheets export URL with timestamp cache buster
       if (!csvText) {
         try {
-          const primaryUrl = "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000";
-          const res0 = await fetch(primaryUrl);
+          const primaryUrl = `https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000&t=${Date.now()}`;
+          const res0 = await fetch(primaryUrl, { cache: "no-store" });
           if (res0.ok) {
             const t = await res0.text();
             if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
@@ -382,11 +382,11 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         }
       }
 
-      // Attempt 3: Google Visualization API (gviz)
+      // Attempt 3: Google Visualization API (gviz) with timestamp cache buster
       if (!csvText) {
         try {
-          const gvizUrl = "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/gviz/tq?tqx=out:csv&gid=0";
-          const resGviz = await fetch(gvizUrl);
+          const gvizUrl = `https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/gviz/tq?tqx=out:csv&gid=0&t=${Date.now()}`;
+          const resGviz = await fetch(gvizUrl, { cache: "no-store" });
           if (resGviz.ok) {
             const t = await resGviz.text();
             if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
@@ -401,12 +401,12 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
       // Attempt 4: CORS proxy fallbacks
       if (!csvText) {
         const proxies = [
-          "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000"),
-          "https://corsproxy.io/?" + encodeURIComponent("https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000")
+          "https://api.allorigins.win/raw?url=" + encodeURIComponent(`https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000&t=${Date.now()}`),
+          "https://corsproxy.io/?" + encodeURIComponent(`https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000&t=${Date.now()}`)
         ];
         for (const pUrl of proxies) {
           try {
-            const resCors = await fetch(pUrl);
+            const resCors = await fetch(pUrl, { cache: "no-store" });
             if (resCors.ok) {
               const t = await resCors.text();
               if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
@@ -421,8 +421,8 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
       if (csvText) {
         const parsedSales = parseSalesCSV(csvText);
         if (parsedSales.length > 0) {
-          const merged = mergeRemoteSalesWithLocal(parsedSales);
-          setSales(merged);
+          setSales(parsedSales);
+          mergeRemoteSalesWithLocal(parsedSales);
           setSyncStatus("success");
           return;
         }
@@ -453,7 +453,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   };
 
   useEffect(() => {
-    fetchGoogleSheetData();
+    fetchGoogleSheetData(true);
   }, []);
 
   // CSV Parser (up to 10000 records)
@@ -498,11 +498,9 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         const total = parseFloat((cols[11] || "0").replace(/\$/g, "").replace(/,/g, "")) || 0;
         const totalSinIva = parseFloat((cols[12] || "0").replace(/\$/g, "").replace(/,/g, "")) || (total > 0 ? total / 1.15 : 0);
         
+        const calculatedMes = getMonthFromDate(fecha);
         let rawMes = cols[13] ? cols[13].trim() : "";
-        let mes = rawMes;
-        if (!mes || mes === "Desconocido") {
-          mes = getMonthFromDate(fecha);
-        }
+        let mes = calculatedMes !== "Desconocido" ? calculatedMes : rawMes;
 
         result.push({
           asesor,
@@ -604,8 +602,6 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     if (!monthFilterValue || monthFilterValue === "all" || monthFilterValue === "all_year") return true;
     
     const mLower = monthFilterValue.toLowerCase().trim();
-    const itemMesLower = (item.mes || "").toLowerCase().trim();
-    if (itemMesLower && (itemMesLower === mLower || itemMesLower.includes(mLower) || mLower.includes(itemMesLower))) return true;
 
     const norm = normalizeDateString(item.fecha);
     if (norm) {
@@ -621,10 +617,13 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
           if (mLower.includes(nameEn) || mLower.includes(nameEs)) {
             if (mLower.includes(y) || !mLower.match(/\d{4}/)) return true;
           }
+          // If transaction date is valid and does NOT match target month, it belongs to another month!
+          return false;
         }
       }
     }
 
+    const itemMesLower = (item.mes || "").toLowerCase().trim();
     return itemMesLower.includes(mLower);
   };
 

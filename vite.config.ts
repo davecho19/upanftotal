@@ -47,29 +47,27 @@ export default defineConfig(() => {
         configureServer(server) {
           server.middlewares.use('/brochures', handleBrochureRequest);
           
-          let cachedCsv = '';
-          const cacheFilePath = path.resolve(__dirname, '.sheets_cache.csv');
-          try {
-            if (fs.existsSync(cacheFilePath)) {
-              cachedCsv = fs.readFileSync(cacheFilePath, 'utf8');
-            }
-          } catch (e) {}
-
-          let lastFetchTime = cachedCsv ? Date.now() : 0;
+          let inMemoryCsv = '';
+          let lastFetchTime = 0;
           let isFetching = false;
 
           const refreshFromGoogle = async (force: boolean = false): Promise<string> => {
-            if (!force && isFetching && cachedCsv) return cachedCsv;
+            const now = Date.now();
+            if (!force && inMemoryCsv && (now - lastFetchTime < 3000)) {
+              return inMemoryCsv;
+            }
+            if (isFetching && inMemoryCsv && !force) return inMemoryCsv;
             isFetching = true;
             try {
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 12000);
               const response = await fetch(
-                "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000",
+                `https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000&t=${Date.now()}`,
                 {
                   signal: controller.signal,
                   headers: {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Cache-Control": "no-cache, no-store, must-revalidate"
                   }
                 }
               );
@@ -77,29 +75,27 @@ export default defineConfig(() => {
               if (response.ok) {
                 const text = await response.text();
                 if (text && (text.includes("ASESOR") || text.includes('"ASESOR"'))) {
-                  cachedCsv = text;
+                  inMemoryCsv = text;
                   lastFetchTime = Date.now();
-                  try {
-                    fs.writeFileSync(cacheFilePath, text, 'utf8');
-                  } catch (e) {}
                   return text;
                 }
               }
             } catch (err) {
-              console.warn('Google Sheets background sync warning:', err);
+              console.warn('Google Sheets sync warning:', err);
             } finally {
               isFetching = false;
             }
-            return cachedCsv;
+            return inMemoryCsv;
           };
-
-          // Trigger immediate prefetch on dev server start
-          refreshFromGoogle().catch(() => {});
 
           server.middlewares.use('/api/sheets', async (req, res) => {
             res.setHeader('Access-Control-Allow-Origin', '*');
             res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
             res.setHeader('Access-Control-Allow-Headers', '*');
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+
             if (req.method === 'OPTIONS') {
               res.statusCode = 204;
               res.end();
@@ -108,57 +104,36 @@ export default defineConfig(() => {
 
             const url = req.url || '';
             const force = url.includes('force=true');
-            const now = Date.now();
 
-            if (!force && cachedCsv && now - lastFetchTime < 5000) {
-              res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-              res.setHeader('X-Cache-Status', 'HIT');
-              res.end(cachedCsv);
-              return;
-            }
-
-            // If we have cached data but it is older than 5s, return cached immediately and refresh in background
-            if (!force && cachedCsv) {
-              res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-              res.setHeader('X-Cache-Status', 'STALE_WHILE_REVALIDATE');
-              res.end(cachedCsv);
-              refreshFromGoogle().catch(() => {});
-              return;
-            }
-
-            // Fresh fetch
             const fresh = await refreshFromGoogle(force);
             res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-            res.setHeader('X-Cache-Status', 'MISS');
-            res.end(fresh || cachedCsv);
+            res.end(fresh || inMemoryCsv);
           });
         },
         configurePreviewServer(server) {
           server.middlewares.use('/brochures', handleBrochureRequest);
           
-          let cachedCsv = '';
-          const cacheFilePath = path.resolve(__dirname, '.sheets_cache.csv');
-          try {
-            if (fs.existsSync(cacheFilePath)) {
-              cachedCsv = fs.readFileSync(cacheFilePath, 'utf8');
-            }
-          } catch (e) {}
-
-          let lastFetchTime = cachedCsv ? Date.now() : 0;
+          let inMemoryCsv = '';
+          let lastFetchTime = 0;
           let isFetching = false;
 
           const refreshFromGoogle = async (force: boolean = false): Promise<string> => {
-            if (!force && isFetching && cachedCsv) return cachedCsv;
+            const now = Date.now();
+            if (!force && inMemoryCsv && (now - lastFetchTime < 3000)) {
+              return inMemoryCsv;
+            }
+            if (isFetching && inMemoryCsv && !force) return inMemoryCsv;
             isFetching = true;
             try {
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 12000);
               const response = await fetch(
-                "https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000",
+                `https://docs.google.com/spreadsheets/d/1TGbabvY1HWd4kmNCQYRPWE75z-50rn7D5JQxZfyZEHA/export?format=csv&gid=0&range=A1:Z10000&t=${Date.now()}`,
                 {
                   signal: controller.signal,
                   headers: {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Cache-Control": "no-cache, no-store, must-revalidate"
                   }
                 }
               );
@@ -166,11 +141,8 @@ export default defineConfig(() => {
               if (response.ok) {
                 const text = await response.text();
                 if (text && (text.includes("ASESOR") || text.includes('"ASESOR"'))) {
-                  cachedCsv = text;
+                  inMemoryCsv = text;
                   lastFetchTime = Date.now();
-                  try {
-                    fs.writeFileSync(cacheFilePath, text, 'utf8');
-                  } catch (e) {}
                   return text;
                 }
               }
@@ -179,13 +151,17 @@ export default defineConfig(() => {
             } finally {
               isFetching = false;
             }
-            return cachedCsv;
+            return inMemoryCsv;
           };
 
           server.middlewares.use('/api/sheets', async (req, res) => {
             res.setHeader('Access-Control-Allow-Origin', '*');
             res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
             res.setHeader('Access-Control-Allow-Headers', '*');
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+
             if (req.method === 'OPTIONS') {
               res.statusCode = 204;
               res.end();
@@ -194,27 +170,10 @@ export default defineConfig(() => {
 
             const url = req.url || '';
             const force = url.includes('force=true');
-            const now = Date.now();
-
-            if (!force && cachedCsv && now - lastFetchTime < 5000) {
-              res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-              res.setHeader('X-Cache-Status', 'HIT');
-              res.end(cachedCsv);
-              return;
-            }
-
-            if (!force && cachedCsv) {
-              res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-              res.setHeader('X-Cache-Status', 'STALE_WHILE_REVALIDATE');
-              res.end(cachedCsv);
-              refreshFromGoogle().catch(() => {});
-              return;
-            }
 
             const fresh = await refreshFromGoogle(force);
             res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-            res.setHeader('X-Cache-Status', 'MISS');
-            res.end(fresh || cachedCsv);
+            res.end(fresh || inMemoryCsv);
           });
         }
       }

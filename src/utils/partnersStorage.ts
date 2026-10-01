@@ -250,8 +250,13 @@ export async function saveNewDistribuidor(nombre: string): Promise<string[]> {
   return updated;
 }
 
+import { clearAllSalesCache } from "./salesStorage";
+
 // Global synchronization function to reload all data from Google Sheets across the entire app
 export async function syncAllGoogleSheetsData(): Promise<{ sociosCount: number; distCount: number }> {
+  // Purge any stale sales cache so components pull fresh data from Google Sheets
+  clearAllSalesCache();
+
   const socios = await fetchRemoteSocios();
   const dist = await fetchRemoteDistribuidores();
 

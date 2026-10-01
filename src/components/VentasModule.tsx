@@ -120,12 +120,12 @@ const PRODUCTOS: Record<string, ProductCatalogItem> = {
       { label: "5 Años", precio: 55.41 },
     ],
     planesRenovacion: [
-      { label: "15 Días", precio: 4.14 },
-      { label: "1 Año", precio: 16.80 },
-      { label: "2 Años", precio: 20.50 },
-      { label: "3 Años", precio: 30.72 },
-      { label: "4 Años", precio: 40.95 },
-      { label: "5 Años", precio: 51.15 },
+      { label: "15 Días", precio: 4.49 },
+      { label: "1 Año", precio: 18.20 },
+      { label: "2 Años", precio: 22.20 },
+      { label: "3 Años", precio: 33.28 },
+      { label: "4 Años", precio: 44.36 },
+      { label: "5 Años", precio: 55.41 },
     ],
   },
   natural_ruc: {
@@ -139,12 +139,12 @@ const PRODUCTOS: Record<string, ProductCatalogItem> = {
       { label: "5 Años", precio: 55.41 },
     ],
     planesRenovacion: [
-      { label: "15 Días", precio: 4.14 },
-      { label: "1 Año", precio: 16.80 },
-      { label: "2 Años", precio: 20.50 },
-      { label: "3 Años", precio: 30.72 },
-      { label: "4 Años", precio: 40.95 },
-      { label: "5 Años", precio: 51.15 },
+      { label: "15 Días", precio: 4.49 },
+      { label: "1 Año", precio: 18.20 },
+      { label: "2 Años", precio: 22.20 },
+      { label: "3 Años", precio: 33.28 },
+      { label: "4 Años", precio: 44.36 },
+      { label: "5 Años", precio: 55.41 },
     ],
   },
   juridica: {
@@ -157,11 +157,11 @@ const PRODUCTOS: Record<string, ProductCatalogItem> = {
       { label: "5 Años", precio: 63.12 },
     ],
     planesRenovacion: [
-      { label: "1 Año", precio: 20.16 },
-      { label: "2 Años", precio: 23.86 },
-      { label: "3 Años", precio: 35.28 },
-      { label: "4 Años", precio: 47.01 },
-      { label: "5 Años", precio: 58.26 },
+      { label: "1 Año", precio: 21.84 },
+      { label: "2 Años", precio: 25.84 },
+      { label: "3 Años", precio: 38.22 },
+      { label: "4 Años", precio: 50.93 },
+      { label: "5 Años", precio: 63.12 },
     ],
   },
   emprende: {
@@ -171,6 +171,38 @@ const PRODUCTOS: Record<string, ProductCatalogItem> = {
       { label: "2 Años", precio: 30.00 },
       { label: "3 Años", precio: 38.00 },
     ],
+  },
+};
+
+// Topes máximos de precio permitidos en firmas electrónicas
+export const FIRMAS_PRECIOS_TOPE: Record<string, Record<string, number>> = {
+  natural: {
+    "15 Días": 4.49,
+    "1 Año": 28.00,
+    "2 Años": 34.16,
+    "3 Años": 51.20,
+    "4 Años": 68.25,
+    "5 Años": 85.25,
+  },
+  natural_ruc: {
+    "15 Días": 4.49,
+    "1 Año": 28.00,
+    "2 Años": 34.16,
+    "3 Años": 51.20,
+    "4 Años": 68.25,
+    "5 Años": 85.25,
+  },
+  juridica: {
+    "1 Año": 33.60,
+    "2 Años": 39.76,
+    "3 Años": 58.80,
+    "4 Años": 78.35,
+    "5 Años": 97.10,
+  },
+  emprende: {
+    "1 Año": 24.00,
+    "2 Años": 30.00,
+    "3 Años": 38.00,
   },
 };
 
@@ -239,11 +271,17 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
   const [productoKey, setProductoKey] = useState<string>("");
   const [tipoVenta, setTipoVenta] = useState<"Nuevo" | "Renovación" | "Socio" | "Distribuidor" | "Upseling">("Nuevo");
 
-  // Socio y Distribuidor solo permitidos en UpConta
+  const isFirmas =
+    mode === "firmas" ||
+    companyMode === "firmas" ||
+    ["natural", "natural_ruc", "juridica", "emprende"].includes(productoKey);
+
+  // Socio y Distribuidor solo permitidos en UpConta con lista oficial
   const isUpcontaPartnerAllowed =
-    mode === "upconta" ||
-    companyMode === "upconta" ||
-    ["facturacion", "erp", "contador"].includes(productoKey);
+    (mode === "upconta" ||
+      companyMode === "upconta" ||
+      ["facturacion", "erp", "contador"].includes(productoKey)) &&
+    !isFirmas;
 
   // Socio / Distribuidor Selection State
   const [selectedPartner, setSelectedPartner] = useState<string>("");
@@ -283,11 +321,14 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
   }, []);
 
   useEffect(() => {
-    if (!isUpcontaPartnerAllowed && (tipoVenta === "Socio" || tipoVenta === "Distribuidor")) {
+    if (!isUpcontaPartnerAllowed && !isFirmas && (tipoVenta === "Socio" || tipoVenta === "Distribuidor")) {
+      setTipoVenta("Nuevo");
+      setSelectedPartner("");
+    } else if (isFirmas && tipoVenta === "Socio") {
       setTipoVenta("Nuevo");
       setSelectedPartner("");
     }
-  }, [isUpcontaPartnerAllowed, tipoVenta]);
+  }, [isUpcontaPartnerAllowed, isFirmas, tipoVenta]);
 
   // Upseling solo permitido en el perfil de firmas con clave 1998 o 123456
   const isFirmasUpselingAllowed =
@@ -338,6 +379,10 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
   };
 
   const planesList = getPlanesList();
+  const currentSelectedPlanObj = planesList[selectedPlanIndex];
+  const currentPlanTope = currentSelectedPlanObj
+    ? (FIRMAS_PRECIOS_TOPE[productoKey]?.[currentSelectedPlanObj.label] ?? null)
+    : null;
 
   // Show/Hide rules
   const productosConAdicionales = ["facturacion", "contador"];
@@ -444,16 +489,27 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
       return;
     }
 
+    const firmaTope = selectedPlanObj ? (FIRMAS_PRECIOS_TOPE[productoKey]?.[selectedPlanObj.label] ?? null) : null;
+    if (firmaTope !== null && montoRegistrado > firmaTope + 0.001) {
+      setStatusMessage({
+        type: "error",
+        text: `El monto registrado ($${montoRegistrado.toFixed(2)}) supera el precio tope permitido de $${firmaTope.toFixed(2)} para ${selectedPlanObj?.label}.`
+      });
+      return;
+    }
+
     if ((tipoVenta === "Socio" || tipoVenta === "Distribuidor") && !selectedPartner.trim()) {
       setStatusMessage({
         type: "error",
-        text: `Por favor selecciona o crea un ${tipoVenta} de la lista oficial.`
+        text: isFirmas
+          ? "Por favor ingresa el nombre del distribuidor."
+          : `Por favor selecciona o crea un ${tipoVenta} de la lista oficial.`
       });
       return;
     }
 
     const adicionalesTexto = adicionales.map(a => `${a.nombre} x${a.cantidad}`).join(", ");
-    const finalTipoVenta = showTipoVentaPlan || showTipoVentaAdicionales || mode === "firmas" ? tipoVenta : "";
+    const finalTipoVenta = showTipoVentaPlan || showTipoVentaAdicionales || mode === "firmas" || isFirmas ? tipoVenta : "";
     const partnerName = (tipoVenta === "Socio" || tipoVenta === "Distribuidor") ? selectedPartner.trim() : "";
     const cleanDate = normalizeDateString(fecha || new Date().toISOString().split("T")[0]);
     const mesCalculado = getMonthFromDate(cleanDate);
@@ -1004,10 +1060,52 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
                       </span>
                     </label>
                   )}
+                  {isFirmas && (
+                    <label className="inline-flex items-center gap-2 font-bold text-sm text-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="tipoVentaRadio"
+                        value="Distribuidor"
+                        checked={tipoVenta === "Distribuidor"}
+                        onChange={() => {
+                          setTipoVenta("Distribuidor");
+                          setSelectedPartner("");
+                          setIsCreatingNewPartner(false);
+                        }}
+                        className="text-orange-600 focus:ring-orange-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span className="flex items-center gap-1.5">
+                        <span>Distribuidor</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 border border-amber-300">
+                          Firmas
+                        </span>
+                      </span>
+                    </label>
+                  )}
                 </div>
 
-                {/* Desplegable de Socios / Distribuidores */}
-                {(tipoVenta === "Socio" || tipoVenta === "Distribuidor") && (
+                {/* Campo de Distribuidor para Firmas (Input de texto directo para registrar en Google Sheets sin almacenar en BD) */}
+                {isFirmas && tipoVenta === "Distribuidor" && (
+                  <div className="mt-3.5 p-4 bg-amber-50/90 border-2 border-amber-300/80 rounded-2xl space-y-2">
+                    <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <Building className="w-4 h-4 text-amber-600" />
+                      <span>Nombre del Distribuidor (Firmas) *</span>
+                    </label>
+                    <p className="text-[11px] text-slate-600 font-medium">
+                      Ingresa el nombre del distribuidor. Se registrará directamente en el campo "SOCIO / DISTRIBUIDOR" de Google Sheets sin almacenar en la base de datos de distribuidores.
+                    </p>
+                    <input
+                      type="text"
+                      value={selectedPartner}
+                      onChange={(e) => setSelectedPartner(e.target.value.toUpperCase())}
+                      placeholder="Ej. NOMBRE DEL DISTRIBUIDOR..."
+                      className="w-full px-3 py-2.5 bg-white border border-amber-300 rounded-xl text-slate-900 font-bold text-xs focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 shadow-2xs uppercase placeholder:normal-case placeholder:text-slate-400"
+                    />
+                  </div>
+                )}
+
+                {/* Desplegable de Socios / Distribuidores para UpConta */}
+                {isUpcontaPartnerAllowed && (tipoVenta === "Socio" || tipoVenta === "Distribuidor") && (
                   <div className="mt-3.5 p-4 bg-orange-50/90 border-2 border-orange-200 rounded-2xl space-y-3">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                       <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
@@ -1181,14 +1279,29 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
             {/* Price Inputs */}
             <div className="space-y-3 text-sm font-medium">
               <div className="flex items-center justify-between gap-4 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-                <span className="text-slate-300 font-bold">Monto Registrado:</span>
+                <div>
+                  <span className="text-slate-300 font-bold block">Monto Registrado:</span>
+                  {currentPlanTope !== null && (
+                    <span className="text-[10px] text-amber-400 font-extrabold block">
+                      Tope máx: ${currentPlanTope.toFixed(2)}
+                    </span>
+                  )}
+                </div>
                 <div className="relative w-36">
                   <span className="absolute left-3 top-2 text-slate-400 font-bold">$</span>
                   <input
                     type="number"
                     step="0.01"
+                    max={currentPlanTope !== null ? currentPlanTope : undefined}
                     value={montoRegistrado || ""}
-                    onChange={e => setMontoRegistrado(parseFloat(e.target.value) || 0)}
+                    onChange={e => {
+                      const val = parseFloat(e.target.value) || 0;
+                      if (currentPlanTope !== null && val > currentPlanTope) {
+                        setMontoRegistrado(currentPlanTope);
+                      } else {
+                        setMontoRegistrado(val);
+                      }
+                    }}
                     className="w-full pl-7 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-right font-black text-white text-base focus:border-orange-400 focus:outline-none"
                   />
                 </div>

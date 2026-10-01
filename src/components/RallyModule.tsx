@@ -246,7 +246,7 @@ export function RallyModule({ companyMode = "all" }: RallyModuleProps = {}) {
     try {
       let csvText = "";
       try {
-        const res = await fetch("/api/sheets");
+        const res = await fetch(`/api/sheets?t=${Date.now()}&force=true`, { cache: "no-store" });
         if (res.ok) {
           const t = await res.text();
           if (t && !t.trim().startsWith("<")) csvText = t;

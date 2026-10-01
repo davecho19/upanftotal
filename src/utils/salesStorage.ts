@@ -22,7 +22,28 @@ export interface SaleTransaction {
 
 export const STORAGE_KEY_SALES = "sales_data_db";
 export const STORAGE_KEY_CUSTOM_SALES = "custom_registered_sales_db";
-export const STORAGE_KEY_SALES_VERSION = "sales_data_v_2026_09_25_live_v7_audit";
+export const STORAGE_KEY_SALES_VERSION = "sales_v9_strict_real_fecha_2026_10_01";
+
+export function clearAllSalesCache(): void {
+  try {
+    const keysToRemove = [
+      "sales_data_db",
+      "custom_registered_sales_db",
+      "upconta_sales_data_db_v2",
+      "upconta_custom_registered_sales_v2",
+      "upconta_sales_data_db",
+      "upconta_custom_registered_sales",
+      "cached_sales_csv",
+      "cached_dashboard_sales"
+    ];
+    keysToRemove.forEach((k) => {
+      try {
+        localStorage.removeItem(k);
+      } catch (e) {}
+    });
+    localStorage.setItem(STORAGE_KEY_SALES_VERSION, STORAGE_KEY_SALES_VERSION);
+  } catch (e) {}
+}
 
 export function normalizeDateString(dateStr: string): string {
   if (!dateStr) return "";
@@ -235,8 +256,7 @@ export function getSpanishCurrentMonthLabel(): string {
 
 export function matchMonth(item: SaleTransaction, targetMonth: string): boolean {
   if (!targetMonth || targetMonth === "all_year" || targetMonth === "all") return true;
-  const mLower = targetMonth.toLowerCase();
-  const itemMesLower = (item.mes || "").toLowerCase();
+  const mLower = targetMonth.toLowerCase().trim();
 
   const norm = normalizeDateString(item.fecha);
   if (norm) {
@@ -252,15 +272,23 @@ export function matchMonth(item: SaleTransaction, targetMonth: string): boolean 
         if (mLower.includes(nameEn) || mLower.includes(nameEs)) {
           if (mLower.includes(y) || !mLower.match(/\d{4}/)) return true;
         }
+        // If fecha is valid and clearly belongs to another month, do NOT fallback to stale text in Column N
+        return false;
       }
     }
   }
 
+  const itemMesLower = (item.mes || "").toLowerCase();
   return itemMesLower.includes(mLower);
 }
 
-export function calculateCurrentMonthTotals(sales: SaleTransaction[]) {
-  const currentMonthStr = getCurrentMonthString();
+export function formatSpanishMonthLabel(monthStr: string): string {
+  if (!monthStr || monthStr === "all_year" || monthStr === "all") return "Todo el Año";
+  const [mName, y] = monthStr.split(" ");
+  return `${SPANISH_MONTHS[mName] || mName} ${y || ""}`.trim();
+}
+
+export function calculateTotalsForMonth(sales: SaleTransaction[], targetMonth: string) {
   let up = 0;
   let fi = 0;
   let upConIva = 0;
@@ -269,7 +297,7 @@ export function calculateCurrentMonthTotals(sales: SaleTransaction[]) {
   let countFi = 0;
 
   for (const s of sales) {
-    if (matchMonth(s, currentMonthStr)) {
+    if (matchMonth(s, targetMonth)) {
       const isUp = isUpContaSale(s);
       // Strictly calculate Sin IVA and Con IVA
       const val = Number(s.totalSinIva) || (Number(s.total) ? Number((s.total / 1.15).toFixed(2)) : 0) || 0;
@@ -296,6 +324,10 @@ export function calculateCurrentMonthTotals(sales: SaleTransaction[]) {
     countUp,
     countFi,
     totalCount: countUp + countFi,
-    monthLabel: getSpanishCurrentMonthLabel()
+    monthLabel: formatSpanishMonthLabel(targetMonth)
   };
+}
+
+export function calculateCurrentMonthTotals(sales: SaleTransaction[]) {
+  return calculateTotalsForMonth(sales, getCurrentMonthString());
 }

@@ -14,7 +14,8 @@ import {
   Users,
   RefreshCw,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  Calendar
 } from "lucide-react";
 import {
   SaleTransaction,
@@ -22,7 +23,9 @@ import {
   mergeRemoteSalesWithLocal,
   normalizeDateString,
   getMonthFromDate,
+  calculateTotalsForMonth,
   calculateCurrentMonthTotals,
+  formatSpanishMonthLabel,
   getSpanishCurrentMonthLabel,
   getCurrentMonthString,
   matchMonth,
@@ -68,21 +71,63 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
   const [salesTransactions, setSalesTransactions] = useState<SaleTransaction[]>(() => getStoredSales());
   const [ivaViewMode, setIvaViewMode] = useState<"sin_iva" | "con_iva">("sin_iva");
 
-  // Dynamically calculate month totals (Sin IVA and Con IVA) strictly synced with salesTransactions
-  const salesTotals = useMemo(() => {
-    return calculateCurrentMonthTotals(salesTransactions);
+  // Available unique months from sales transactions
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    salesTransactions.forEach(s => {
+      if (s.mes && s.mes.trim() && s.mes !== "UNKNOWN" && !s.mes.match(/^\d+(\.\d+)?$/) && !s.mes.startsWith('"')) {
+        set.add(s.mes.trim());
+      }
+    });
+
+    const standardMonths = [
+      "January 2026", "February 2026", "March 2026", "April 2026",
+      "May 2026", "June 2026", "July 2026", "August 2026",
+      "September 2026", "October 2026", "November 2026", "December 2026"
+    ];
+    standardMonths.forEach(m => set.add(m));
+
+    const monthOrderMap: Record<string, number> = {
+      "January": 1, "February": 2, "March": 3, "April": 4,
+      "May": 5, "June": 6, "July": 7, "August": 8,
+      "September": 9, "October": 10, "November": 11, "December": 12
+    };
+
+    return Array.from(set).sort((a, b) => {
+      const partsA = a.split(" ");
+      const partsB = b.split(" ");
+      const yrA = parseInt(partsA[1] || "2026", 10);
+      const yrB = parseInt(partsB[1] || "2026", 10);
+      if (yrA !== yrB) return yrB - yrA;
+      const mA = monthOrderMap[partsA[0]] || 0;
+      const mB = monthOrderMap[partsB[0]] || 0;
+      return mB - mA;
+    });
   }, [salesTransactions]);
 
-  // Top 5 Productos más vendidos en Firmas y Sistemas (Mes Vigente)
+  // Selected Month filter: defaults to current month if it has sales, otherwise to the most recent month with sales
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const cur = getCurrentMonthString();
+    const stored = getStoredSales();
+    const countInCur = stored.filter(s => matchMonth(s, cur)).length;
+    if (countInCur > 0) return cur;
+    return "September 2026";
+  });
+
+  // Dynamically calculate month totals (Sin IVA and Con IVA) strictly synced with selectedMonth
+  const salesTotals = useMemo(() => {
+    return calculateTotalsForMonth(salesTransactions, selectedMonth);
+  }, [salesTransactions, selectedMonth]);
+
+  // Top 5 Productos más vendidos en Firmas y Sistemas (Mes Seleccionado)
   const topProductsCurrentMonth = useMemo(() => {
-    const currentMonthStr = getCurrentMonthString();
     const countFirmas: Record<string, number> = {};
     const countSistemas: Record<string, number> = {};
     let totalUnidadesFirmas = 0;
     let totalUnidadesSistemas = 0;
 
     salesTransactions.forEach((s) => {
-      if (matchMonth(s, currentMonthStr)) {
+      if (matchMonth(s, selectedMonth)) {
         const isUp = isUpContaSale(s);
         const qty = Number((s as any).cantidad) || 1;
         if (isUp) {
@@ -113,11 +158,10 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
       totalUnidadesFirmas,
       totalUnidadesSistemas
     };
-  }, [salesTransactions]);
+  }, [salesTransactions, selectedMonth]);
 
-  // Ranking de Asesores Comerciales con el Monto Vendido de Cada Uno (Mes Vigente)
+  // Ranking de Asesores Comerciales con el Monto Vendido de Cada Uno (Mes Seleccionado)
   const advisorRankingCurrentMonth = useMemo(() => {
-    const currentMonthStr = getCurrentMonthString();
     const map: Record<string, {
       name: string;
       totalSinIva: number;
@@ -134,7 +178,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
     let grandTotalMesConIva = 0;
 
     salesTransactions.forEach((s) => {
-      if (matchMonth(s, currentMonthStr)) {
+      if (matchMonth(s, selectedMonth)) {
         const rawName = (s.asesor || "").trim();
         if (!rawName) return;
 
@@ -198,7 +242,7 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
       grandTotalMesSinIva,
       grandTotalMesConIva
     };
-  }, [salesTransactions, ivaViewMode]);
+  }, [salesTransactions, selectedMonth, ivaViewMode]);
 
   // Helper parser for Google Sheets CSV matching DashboardModule
   const parseCSVToTransactions = (text: string): SaleTransaction[] => {
@@ -239,11 +283,9 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
         const total = parseFloat((cols[11] || "0").replace(/\$/g, "").replace(/,/g, "")) || 0;
         const totalSinIva = parseFloat((cols[12] || "0").replace(/\$/g, "").replace(/,/g, "")) || (total > 0 ? parseFloat((total / 1.15).toFixed(2)) : 0);
 
+        const calculatedMes = getMonthFromDate(fecha);
         let rawMes = cols[13] ? cols[13].trim() : "";
-        let mes = rawMes;
-        if (!mes || mes === "Desconocido") {
-          mes = getMonthFromDate(fecha);
-        }
+        let mes = calculatedMes !== "Desconocido" ? calculatedMes : rawMes;
 
         result.push({
           asesor,
@@ -267,14 +309,14 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
     return result;
   };
 
-  const loadDashboardSales = async (force: boolean = false) => {
+  const loadDashboardSales = async (force: boolean = true) => {
     setIsRefreshing(true);
     try {
       let csvText = "";
 
       // 1. Try server proxy (instant memory cache + force option)
       try {
-        const res = await fetch(`/api/sheets?t=${Date.now()}${force ? "&force=true" : ""}`);
+        const res = await fetch(`/api/sheets?t=${Date.now()}&force=true`, { cache: "no-store" });
         if (res.ok) {
           const t = await res.text();
           if (t && !t.trim().startsWith("<") && (t.includes("ASESOR") || t.includes('"ASESOR"'))) {
@@ -530,22 +572,40 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
 
             <div className="space-y-3.5">
               {/* Header de Ventas */}
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-2.5 gap-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30">
+                  <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 shrink-0">
                     <TrendingUp className="w-4 h-4" />
                   </div>
                   <div>
                     <h2 className="text-sm sm:text-base font-black text-white uppercase tracking-wider">
-                      Ventas Mes Vigente ({salesTotals.monthLabel})
+                      Ventas • {salesTotals.monthLabel}
                     </h2>
                     <p className="text-[11px] text-emerald-400 font-semibold">
-                      Valores Netos Facturados Sin IVA
+                      {ivaViewMode === "con_iva" ? "Valores Con IVA (Google Sheets)" : "Valores Netos Facturados Sin IVA"}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Selector de Mes para filtrar Home y tablas */}
+                  <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-700/80 shadow-2xs">
+                    <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="bg-transparent text-white text-[11px] font-bold focus:outline-none cursor-pointer"
+                      title="Seleccionar mes para filtrar métricas y tablas"
+                    >
+                      <option value="all_year" className="bg-slate-900 text-white">⭐ Todo el Año</option>
+                      {availableMonths.map((m) => (
+                        <option key={m} value={m} className="bg-slate-900 text-white">
+                          {formatSpanishMonthLabel(m)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   {/* Selector Sin IVA / Con IVA (Total Sheet) */}
                   <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-700/80 text-[10px] font-bold">
                     <button
@@ -570,14 +630,19 @@ export function CommercialLockScreen({ onUnlock }: CommercialLockScreenProps) {
                       }`}
                       title="Valores con IVA (Columna TOTAL de Google Sheets)"
                     >
-                      Con IVA (Sheets)
+                      Con IVA
                     </button>
                   </div>
 
-                  <span className="hidden sm:inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span>Sheets En Vivo</span>
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => loadDashboardSales(true)}
+                    disabled={isRefreshing}
+                    className="p-1.5 rounded-lg bg-slate-950 border border-slate-700 text-slate-300 hover:text-white hover:border-amber-400 transition-colors cursor-pointer"
+                    title="Actualizar datos desde Google Sheets"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-amber-400" : ""}`} />
+                  </button>
                 </div>
               </div>
 
