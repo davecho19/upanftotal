@@ -48,6 +48,7 @@ import {
 } from "../utils/salesStorage";
 import { ProductSummaryTable } from "./ProductSummaryTable";
 import { ProductModalitiesTables } from "./ProductModalitiesTables";
+import { GrowthCurveChart } from "./GrowthCurveChart";
 export type { SaleTransaction };
 
 const COLORS = ["#0B2545", "#F97316", "#10B981", "#6366F1", "#8B5CF6", "#EC4899", "#14B8A6"];
@@ -339,7 +340,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   }, [selectedMonth]);
 
   // Sub tab view inside dashboard
-  const [activeViewTab, setActiveViewTab] = useState<"overview" | "producto" | "detalle" | "tabla_productos">("overview");
+  const [activeViewTab, setActiveViewTab] = useState<"overview" | "crecimiento" | "producto" | "detalle" | "tabla_productos">("overview");
 
   // Dynamic week ranges for selected month
   const dynamicWeekRanges = useMemo(() => {
@@ -1487,6 +1488,18 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         </button>
 
         <button
+          onClick={() => setActiveViewTab("crecimiento")}
+          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeViewTab === "crecimiento"
+              ? "bg-[#0B2545] text-white shadow-md"
+              : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
+          }`}
+        >
+          <TrendingUp className="w-4 h-4 text-emerald-400" />
+          <span>Curva de Crecimiento (Ene - Dic)</span>
+        </button>
+
+        <button
           onClick={() => setActiveViewTab("producto")}
           className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
             activeViewTab === "producto"
@@ -1526,6 +1539,14 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
       {/* ================= VIEW 1: OVERVIEW CHARTS ================= */}
       {activeViewTab === "overview" && (
         <div className="space-y-8">
+          {/* Curva de Crecimiento Anual de Ventas 2026 (Nuevas vs Renovaciones) */}
+          <GrowthCurveChart
+            sales={baseSales}
+            companyMode={companyMode}
+            allAdvisers={allAdvisers}
+            formatCurrency={formatCurrency}
+          />
+
           {/* Chart 1: Ventas por Asesor */}
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-4">
@@ -1995,6 +2016,18 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ================= VIEW: CURVA DE CRECIMIENTO DEDICADA (ENERO - DICIEMBRE 2026) ================= */}
+      {activeViewTab === "crecimiento" && (
+        <div className="space-y-6">
+          <GrowthCurveChart
+            sales={baseSales}
+            companyMode={companyMode}
+            allAdvisers={allAdvisers}
+            formatCurrency={formatCurrency}
+          />
         </div>
       )}
 
