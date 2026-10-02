@@ -317,7 +317,13 @@ export const APPS_SCRIPT_SOURCE_CODE = `function doGet(e) {
       }
     }
 
-    // 3. REGISTRAR VENTA EN PESTAÑA "GENERAL" (15 COLUMNAS HASTA LA 'O')
+    // 3. ACTUALIZAR O SINCRONIZAR PESTAÑA "COMI SOCIO" CON TODA LA DATA HISTÓRICA
+    if (action === "actualizar_comi_socio" || action === "sincronizar_comi_socio") {
+      var resultadoComi = actualizarPestanaComiSocio(ss);
+      return ContentService.createTextOutput(JSON.stringify(resultadoComi)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 4. REGISTRAR VENTA EN PESTAÑA "GENERAL" (15 COLUMNAS HASTA LA 'O')
     var sheetGeneral = ss.getSheetByName("GENERAL") || ss.getSheets()[0];
     var totalNum = parseFloat(p.total || 0) || 0;
     var totalSinIva = (totalNum / 1.15).toFixed(2);
@@ -343,12 +349,34 @@ export const APPS_SCRIPT_SOURCE_CODE = `function doGet(e) {
 
     sheetGeneral.appendRow(fila);
 
+    // 5. SI TIENE SOCIO, REGISTRAR AUTOMÁTICAMENTE EN PESTAÑA "COMI SOCIO"
+    var registroComi = false;
+    if (socioODist) {
+      var sheetComi = ss.getSheetByName("COMI SOCIO") || ss.getSheetByName("comi socio") || ss.getSheetByName("COMI_SOCIO");
+      if (!sheetComi) {
+        sheetComi = ss.insertSheet("COMI SOCIO");
+        sheetComi.appendRow(["SOCIO", "FECHA", "MES", "ID CLIENTE", "NOMBRE CLIENTE", "TIPO DE PLAN", "PRECIO"]);
+      }
+      var filaComi = [
+        socioODist,                             // SOCIO
+        p.fecha || "",                          // FECHA
+        p.mes || "",                            // MES
+        p.ruc || "",                            // ID CLIENTE
+        p.nombre || "",                         // NOMBRE CLIENTE
+        p.plan || "",                           // TIPO DE PLAN
+        p.total || "0.00"                       // PRECIO
+      ];
+      sheetComi.appendRow(filaComi);
+      registroComi = true;
+    }
+
     return ContentService.createTextOutput(JSON.stringify({
       status: "ok",
       hoja: sheetGeneral.getName(),
       filaDestino: sheetGeneral.getLastRow(),
       filaEscrita: fila,
-      socioDistribuidorRegistrado: socioODist
+      socioDistribuidorRegistrado: socioODist,
+      registradoEnComiSocio: registroComi
     })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
@@ -357,4 +385,92 @@ export const APPS_SCRIPT_SOURCE_CODE = `function doGet(e) {
       mensaje: error.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// Función para actualizar y sincronizar completamente la pestaña COMI SOCIO con la data existente de GENERAL
+function actualizarPestanaComiSocio(spreadsheet) {
+  var ss = spreadsheet || SpreadsheetApp.getActiveSpreadsheet();
+  var sheetGeneral = ss.getSheetByName("GENERAL") || ss.getSheets()[0];
+  var sheetComi = ss.getSheetByName("COMI SOCIO") || ss.getSheetByName("comi socio") || ss.getSheetByName("COMI_SOCIO");
+
+  if (!sheetComi) {
+    sheetComi = ss.insertSheet("COMI SOCIO");
+  }
+
+  var headers = ["SOCIO", "FECHA", "MES", "ID CLIENTE", "NOMBRE CLIENTE", "TIPO DE PLAN", "PRECIO"];
+  var dataGeneral = sheetGeneral.getDataRange().getValues();
+
+  if (!dataGeneral || dataGeneral.length <= 1) {
+    sheetComi.clearContents();
+    sheetComi.appendRow(headers);
+    return { status: "ok", registros: 0, mensaje: "La pestaña GENERAL no contiene registros." };
+  }
+
+  var filasComi = [];
+  filasComi.push(headers);
+
+  for (var i = 1; i < dataGeneral.length; i++) {
+    var fila = dataGeneral[i];
+    var socio = (fila[14] || "").toString().trim(); // Col O (15): SOCIO / DISTRIBUIDOR
+
+    // Únicamente si se agregó el socio
+    if (socio) {
+      filasComi.push([
+        socio,                                    // SOCIO
+        fila[1] ? fila[1].toString().trim() : "", // FECHA
+        fila[13] ? fila[13].toString().trim() : "",// MES
+        fila[2] ? fila[2].toString().trim() : "", // ID CLIENTE (RUC)
+        fila[3] ? fila[3].toString().trim() : "", // NOMBRE CLIENTE
+        fila[6] ? fila[6].toString().trim() : "", // TIPO DE PLAN
+        fila[11] ? fila[11] : "0.00"              // PRECIO (TOTAL)
+      ]);
+    }
+  }
+
+  sheetComi.clearContents();
+  sheetComi.getRange(1, 1, filasComi.length, headers.length).setValues(filasComi);
+
+  // Formato visual a encabezados
+  var headerRange = sheetComi.getRange(1, 1, 1, headers.length);
+  headerRange.setBackground("#EA580C"); // Naranja UpConta
+  headerRange.setFontColor("#FFFFFF");
+  headerRange.setFontWeight("bold");
+
+  return {
+    status: "ok",
+    hoja: sheetComi.getName(),
+    registrosSincronizados: filasComi.length - 1
+  };
+}
+
+// Ejecutar directamente desde el editor de Google Apps Script para actualizar la pestaña COMI SOCIO
+function sincronizarHistoricoComiSocio() {
+  var res = actualizarPestanaComiSocio();
+  Logger.log("Sincronización completada: " + JSON.stringify(res));
 }`;
+
+// Helper para sincronizar la pestaña COMI SOCIO desde la app
+export async function syncComiSocioRemote(): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    const webappUrl = getSheetWebAppUrl();
+    const url = `${webappUrl}?action=actualizar_comi_socio&t=${Date.now()}`;
+    const res = await fetch(url, { method: "GET" });
+    const json = await res.json();
+    if (json && json.status === "ok") {
+      return {
+        success: true,
+        message: `¡Pestaña COMI SOCIO actualizada exitosamente con ${json.registrosSincronizados || "todos los"} registros!`,
+        data: json
+      };
+    }
+    return {
+      success: false,
+      message: json.mensaje || "Respuesta recibida pero requiere actualización del script."
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || "No se pudo conectar con el Web App. Verifica el script."
+    };
+  }
+}

@@ -32,7 +32,8 @@ import {
   fetchRemoteDistribuidores,
   APPS_SCRIPT_SOURCE_CODE,
   getSheetWebAppUrl,
-  setSheetWebAppUrl
+  setSheetWebAppUrl,
+  syncComiSocioRemote
 } from "../utils/partnersStorage";
 
 // Google Apps Script WebApp Endpoint URL
@@ -177,7 +178,7 @@ const PRODUCTOS: Record<string, ProductCatalogItem> = {
 // Topes máximos de precio permitidos en firmas electrónicas
 export const FIRMAS_PRECIOS_TOPE: Record<string, Record<string, number>> = {
   natural: {
-    "15 Días": 4.49,
+    "15 Días": 20.00,
     "1 Año": 28.00,
     "2 Años": 34.16,
     "3 Años": 51.20,
@@ -185,7 +186,7 @@ export const FIRMAS_PRECIOS_TOPE: Record<string, Record<string, number>> = {
     "5 Años": 85.25,
   },
   natural_ruc: {
-    "15 Días": 4.49,
+    "15 Días": 20.00,
     "1 Año": 28.00,
     "2 Años": 34.16,
     "3 Años": 51.20,
@@ -295,6 +296,9 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
   const [webappUrlInput, setWebappUrlInput] = useState<string>(() => getSheetWebAppUrl());
   const [isTestingUrl, setIsTestingUrl] = useState<boolean>(false);
   const [urlTestResult, setUrlTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isSyncingComiSocio, setIsSyncingComiSocio] = useState<boolean>(false);
+  const [comiSocioSyncResult, setComiSocioSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [copiedFormula, setCopiedFormula] = useState<boolean>(false);
 
   useEffect(() => {
     // Sincronizar listas desde las pestañas de Google Sheet al cargar
@@ -659,6 +663,19 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
     }
   };
 
+  const handleSyncComiSocio = async () => {
+    setIsSyncingComiSocio(true);
+    setComiSocioSyncResult(null);
+    try {
+      const res = await syncComiSocioRemote();
+      setComiSocioSyncResult(res);
+    } catch (e: any) {
+      setComiSocioSyncResult({ success: false, message: e.message || "Error al sincronizar con Apps Script." });
+    } finally {
+      setIsSyncingComiSocio(false);
+    }
+  };
+
   const listaAdicionalesOpciones = productoKey === "contador" ? [...ADICIONALES_BASE, ...ADICIONALES_CONTADOR] : ADICIONALES_BASE;
 
   return (
@@ -755,6 +772,70 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
                   }`}
                 >
                   {urlTestResult.message}
+                </div>
+              )}
+            </div>
+
+            {/* Sección Especial: Pestaña COMI SOCIO */}
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2.5">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
+                    Nueva Pestaña
+                  </span>
+                  <span className="text-xs font-black text-amber-950">Pestaña "COMI SOCIO" en Google Sheets</span>
+                </div>
+                <button
+                  type="button"
+                  disabled={isSyncingComiSocio}
+                  onClick={handleSyncComiSocio}
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-xs font-black transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                >
+                  {isSyncingComiSocio ? "Sincronizando..." : "Sincronizar COMI SOCIO Ahora"}
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-700 leading-relaxed font-medium">
+                La pestaña <strong>COMI SOCIO</strong> con los campos <code>SOCIO | FECHA | MES | ID CLIENTE | NOMBRE CLIENTE | TIPO DE PLAN | PRECIO</code> se alimenta de la pestaña <strong>GENERAL</strong> únicamente si se agrega socio:
+              </p>
+
+              {/* Opción Directa: Fórmula de Google Sheets */}
+              <div className="bg-white border border-amber-300 rounded-lg p-2.5 space-y-1.5 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-slate-900">
+                    Fórmula Automática (Pegar en la Celda A2 de "COMI SOCIO"):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        '=QUERY(GENERAL!A2:O, "SELECT O, B, N, C, D, G, L WHERE O IS NOT NULL AND O != \'\' LABEL O \'\', B \'\', N \'\', C \'\', D \'\', G \'\', L \'\'", 0)'
+                      );
+                      setCopiedFormula(true);
+                      setTimeout(() => setCopiedFormula(false), 3000);
+                    }}
+                    className="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded text-[10px] font-bold cursor-pointer transition-colors"
+                  >
+                    {copiedFormula ? "¡Fórmula Copiada! ✓" : "Copiar Fórmula"}
+                  </button>
+                </div>
+                <code className="block bg-slate-950 text-amber-300 p-2 rounded text-[10px] font-mono break-all select-all">
+                  =QUERY(GENERAL!A2:O, &quot;SELECT O, B, N, C, D, G, L WHERE O IS NOT NULL AND O != &apos;&apos; LABEL O &apos;&apos;, B &apos;&apos;, N &apos;&apos;, C &apos;&apos;, D &apos;&apos;, G &apos;&apos;, L &apos;&apos;&quot;, 0)
+                </code>
+                <span className="text-[10px] text-slate-500 block">
+                  Mapeo exacto: <strong>SOCIO (Col O), FECHA (Col B), MES (Col N), ID CLIENTE (Col C), NOMBRE CLIENTE (Col D), TIPO DE PLAN (Col G), PRECIO (Col L)</strong>.
+                </span>
+              </div>
+
+              {comiSocioSyncResult && (
+                <div
+                  className={`p-2 rounded-lg text-xs font-bold border ${
+                    comiSocioSyncResult.success
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                      : "bg-rose-50 text-rose-800 border-rose-300"
+                  }`}
+                >
+                  {comiSocioSyncResult.message}
                 </div>
               )}
             </div>
