@@ -1,20 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
-} from "recharts";
-import {
-  BarChart3,
-  PieChart as PieChartIcon,
   TrendingUp,
   DollarSign,
   Users,
@@ -22,21 +7,33 @@ import {
   Calendar,
   Filter,
   RefreshCw,
-  FileSpreadsheet,
   CheckCircle2,
-  Award,
   Search,
   Sparkles,
   Layers,
-  Table,
-  Zap,
   Clock,
   Building2,
   ShieldCheck,
   Calculator,
   FileCheck,
-  Flame
+  BarChart3,
+  ArrowUpRight,
+  TrendingDown,
+  PieChart as PieChartIcon
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  Cell
+} from "recharts";
 
 import { INITIAL_OFFLINE_SALES } from "../salesData";
 import { 
@@ -46,12 +43,40 @@ import {
   getMonthFromDate, 
   SaleTransaction 
 } from "../utils/salesStorage";
-import { ProductSummaryTable } from "./ProductSummaryTable";
-import { ProductModalitiesTables } from "./ProductModalitiesTables";
-import { GrowthCurveChart } from "./GrowthCurveChart";
 export type { SaleTransaction };
 
-const COLORS = ["#0B2545", "#F97316", "#10B981", "#6366F1", "#8B5CF6", "#EC4899", "#14B8A6"];
+export type SaleChannel = "nueva" | "renovacion" | "socio" | "distribuidor";
+
+export function getSaleChannel(item: SaleTransaction): SaleChannel {
+  const tipo = (item.tipo || "").toLowerCase().trim();
+  const socioCol = (item.socioDistribuidor || "").toLowerCase().trim();
+
+  if (tipo.includes("distribuidor") || socioCol.includes("distribuidor")) {
+    return "distribuidor";
+  }
+  if (socioCol.length > 0 || tipo.includes("socio")) {
+    return "socio";
+  }
+  if (tipo.includes("renov")) {
+    return "renovacion";
+  }
+  return "nueva";
+}
+
+export const MONTHS_LIST = [
+  { num: 1, key: "01", name: "Enero", short: "Ene" },
+  { num: 2, key: "02", name: "Febrero", short: "Feb" },
+  { num: 3, key: "03", name: "Marzo", short: "Mar" },
+  { num: 4, key: "04", name: "Abril", short: "Abr" },
+  { num: 5, key: "05", name: "Mayo", short: "May" },
+  { num: 6, key: "06", name: "Junio", short: "Jun" },
+  { num: 7, key: "07", name: "Julio", short: "Jul" },
+  { num: 8, key: "08", name: "Agosto", short: "Ago" },
+  { num: 9, key: "09", name: "Septiembre", short: "Sep" },
+  { num: 10, key: "10", name: "Octubre", short: "Oct" },
+  { num: 11, key: "11", name: "Noviembre", short: "Nov" },
+  { num: 12, key: "12", name: "Diciembre", short: "Dic" }
+];
 
 // Helper function to calculate month-isolated Friday-to-Thursday week info
 function getFridayToThursdayWeek(dateStr: string) {
@@ -171,41 +196,6 @@ function getWeekRangesForMonth(selectedMonthStr: string) {
   return ranges;
 }
 
-const CustomBarTooltip = ({ active, payload, label, formatCurrency }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-[#0B2545] text-white p-3.5 rounded-2xl border border-slate-700 shadow-2xl space-y-2 text-xs font-sans z-50">
-        <p className="font-black text-sm text-white border-b border-slate-700/80 pb-1.5 flex items-center justify-between gap-4">
-          <span>{label}</span>
-          <span className="text-[10px] bg-orange-500/30 text-orange-300 font-extrabold px-2 py-0.5 rounded-full">
-            Asesor
-          </span>
-        </p>
-        <div className="space-y-1.5">
-          {payload.map((entry: any, index: number) => {
-            let labelColor = "#38BDF8"; // Bright Sky Blue for UpConta
-            if (entry.dataKey === "firmas") labelColor = "#FACC15"; // Bright Yellow for Firmas
-            if (entry.dataKey === "cantidad") labelColor = "#FB923C"; // Bright Orange for Cantidad
-
-            return (
-              <div key={`item-${index}`} className="flex items-center justify-between gap-6 font-bold py-0.5">
-                <span className="flex items-center gap-1.5" style={{ color: labelColor }}>
-                  <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: labelColor }}></span>
-                  {entry.name}:
-                </span>
-                <span className="text-white font-black text-xs">
-                  {entry.dataKey === "cantidad" ? `${entry.value} ventas` : formatCurrency ? formatCurrency(Number(entry.value)) : `$${entry.value}`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-  return null;
-};
-
 const getCurrentMonthString = (): string => {
   const now = new Date();
   const months = [
@@ -268,6 +258,7 @@ const getSpanishMonthLabel = (mStr: string): string => {
 
 export interface DashboardModuleProps {
   companyMode?: "all" | "upconta" | "firmas" | "locked";
+  accessProfile?: string | null;
 }
 
 const normalizeText = (str: string): string => {
@@ -278,7 +269,8 @@ const normalizeText = (str: string): string => {
     .trim();
 };
 
-export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
+export function DashboardModule({ companyMode = "all", accessProfile = null }: DashboardModuleProps) {
+  const isAccess1998 = accessProfile === "1998";
   const currentMonthString = getCurrentMonthString();
   const defaultRange = getMonthDateRange(currentMonthString);
 
@@ -320,15 +312,12 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     if (companyMode === "upconta") {
       setSelectedCategory("upconta");
       setSelectedAdviser("all");
-      setCompCategory("upconta");
     } else if (companyMode === "firmas") {
       setSelectedCategory("firmas");
       setSelectedAdviser("all");
-      setCompCategory("firmas");
     } else {
       setSelectedCategory("all");
       setSelectedAdviser("all");
-      setCompCategory("all");
     }
   }, [companyMode]);
 
@@ -338,9 +327,6 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     setStartDate(range.start);
     setEndDate(range.end);
   }, [selectedMonth]);
-
-  // Sub tab view inside dashboard
-  const [activeViewTab, setActiveViewTab] = useState<"overview" | "crecimiento" | "producto" | "detalle" | "tabla_productos">("overview");
 
   // Dynamic week ranges for selected month
   const dynamicWeekRanges = useMemo(() => {
@@ -532,9 +518,16 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     return prod.includes("plan") || prod.includes("facturaci") || prod.includes("erp") || prod.includes("contador") || prod.includes("upconta") || plan.includes("erp") || plan.includes("contador");
   };
 
+  // Helper check for Convenio sale (any sale with value > $100)
+  const isConvenioSale = (item: SaleTransaction) => {
+    const tot = Number(item.total) || 0;
+    const sinIva = Number(item.totalSinIva) || (tot ? tot / 1.15 : 0) || 0;
+    return tot > 100 || sinIva > 100;
+  };
+
   // Base sales filtered by company mode:
   // - "upconta" (170622): only Karla Haro & David Santander, and only UpConta products
-  // - "firmas" (123456): only Salomé Estrella, Ismenia Escalona, Evelyn Narváez, and only Firmas products
+  // - "firmas" (123456 / 1998): only Salomé Estrella, Ismenia Escalona, Evelyn Narváez, and only Firmas products
   // - "all" (0000) / "locked": all records
   const baseSales = useMemo(() => {
     if (companyMode === "upconta") {
@@ -550,11 +543,11 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         const advNorm = normalizeText(item.asesor);
         const isAllowedAdv = advNorm.includes("salome") || advNorm.includes("ismen") || advNorm.includes("evelyn");
         const isFir = !isUpContaSale(item);
-        return isAllowedAdv && isFir;
+        return (isAllowedAdv || isAccess1998) && isFir;
       });
     }
     return sales;
-  }, [sales, companyMode]);
+  }, [sales, companyMode, isAccess1998]);
 
   // Available unique advisers and months based on company baseSales
   const allAdvisers = useMemo(() => {
@@ -628,27 +621,6 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     return itemMesLower.includes(mLower);
   };
 
-  // State for 4th Comparative Month module
-  const [compFilterMode, setCompFilterMode] = useState<"mes_semana" | "rango_fechas">("mes_semana");
-  const [compMonthA, setCompMonthA] = useState<string>("June 2026");
-  const [compMonthB, setCompMonthB] = useState<string>("July 2026");
-  const [compWeek, setCompWeek] = useState<string>("all");
-  const [compCategory, setCompCategory] = useState<string>("all");
-  const [compStartDateA, setCompStartDateA] = useState<string>("2026-06-01");
-  const [compEndDateA, setCompEndDateA] = useState<string>("2026-06-30");
-  const [compStartDateB, setCompStartDateB] = useState<string>("2026-07-01");
-  const [compEndDateB, setCompEndDateB] = useState<string>("2026-07-31");
-
-  // Keep comparative date ranges synced when compMonthA or compMonthB changes
-  useEffect(() => {
-    const rA = getMonthDateRange(compMonthA);
-    const rB = getMonthDateRange(compMonthB);
-    setCompStartDateA(rA.start);
-    setCompEndDateA(rA.end);
-    setCompStartDateB(rB.start);
-    setCompEndDateB(rB.end);
-  }, [compMonthA, compMonthB]);
-
   // 1. Sales dataset strictly for CHARTS and REPORTS (Only affected by MES filter)
   const salesForChartsAndCommissions = useMemo(() => {
     return baseSales.filter(item => {
@@ -657,11 +629,14 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         return false;
       }
 
-      // Product Line filter (UpConta vs Firmas)
+      // Product Line filter (UpConta vs Firmas vs Convenios)
       if (selectedCategory !== "all") {
         const isUp = isUpContaSale(item);
+        const isConv = isConvenioSale(item);
         if (selectedCategory === "upconta" && !isUp) return false;
         if (selectedCategory === "firmas" && isUp) return false;
+        if (selectedCategory === "solo_firmas" && (isUp || isConv)) return false;
+        if (selectedCategory === "solo_convenios" && (isUp || !isConv)) return false;
       }
 
       // Must match selected Month
@@ -704,13 +679,6 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     });
   }, [salesForChartsAndCommissions, timeFilter, selectedWeek, startDate, endDate]);
 
-  // Sorted Sales for Detalle view & Latest Sale Callout
-  const sortedSales = useMemo(() => {
-    return [...filteredSales].sort((a, b) => (b.fecha > a.fecha ? 1 : b.fecha < a.fecha ? -1 : 0));
-  }, [filteredSales]);
-
-  const latestSale = sortedSales.length > 0 ? sortedSales[0] : null;
-
   // Breakdown metrics for KPI cards (3 rows of 3 matching brand guidelines)
   const totalVentasMonto = useMemo(() => filteredSales.reduce((acc, curr) => acc + (Number(curr.totalSinIva) || (Number(curr.total) ? Number(curr.total) / 1.15 : 0) || 0), 0), [filteredSales]);
   const totalVentasSinIva = totalVentasMonto;
@@ -729,299 +697,19 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
   const cantidadFirmas = salesFirmas.length;
   const ticketPromedioFirmas = cantidadFirmas > 0 ? totalVentasFirmas / cantidadFirmas : 0;
 
-  // Dynamic Chart 1: Adviser Chart (Uses salesForChartsAndCommissions)
-  const adviserChartData = useMemo(() => {
-    const map: Record<string, { name: string; ventas: number; cantidad: number; upconta: number; firmas: number }> = {};
-    
-    allAdvisers.forEach(name => {
-      map[name] = { name, ventas: 0, cantidad: 0, upconta: 0, firmas: 0 };
-    });
+  // Specific metrics for access 1998: Ventas Firmas (<= $100) vs Venta Convenios (> $100)
+  const salesFirmasNormal = useMemo(() => salesFirmas.filter(s => !isConvenioSale(s)), [salesFirmas]);
+  const salesConvenios = useMemo(() => salesFirmas.filter(s => isConvenioSale(s)), [salesFirmas]);
 
-    salesForChartsAndCommissions.forEach(s => {
-      if (!map[s.asesor]) {
-        map[s.asesor] = { name: s.asesor, ventas: 0, cantidad: 0, upconta: 0, firmas: 0 };
-      }
-      map[s.asesor].ventas += s.totalSinIva;
-      map[s.asesor].cantidad += 1;
-      if (isUpContaSale(s)) {
-        map[s.asesor].upconta += s.totalSinIva;
-      } else {
-        map[s.asesor].firmas += s.totalSinIva;
-      }
-    });
+  const totalVentasFirmasNormal = useMemo(() => salesFirmasNormal.reduce((acc, curr) => acc + (Number(curr.totalSinIva) || (Number(curr.total) ? Number(curr.total) / 1.15 : 0) || 0), 0), [salesFirmasNormal]);
+  const totalVentasFirmasNormalConIva = useMemo(() => salesFirmasNormal.reduce((acc, curr) => acc + (Number(curr.total) || (Number(curr.totalSinIva) ? Number(curr.totalSinIva) * 1.15 : 0) || 0), 0), [salesFirmasNormal]);
+  const cantidadFirmasNormal = salesFirmasNormal.length;
+  const ticketPromedioFirmasNormal = cantidadFirmasNormal > 0 ? totalVentasFirmasNormal / cantidadFirmasNormal : 0;
 
-    return Object.values(map).sort((a, b) => b.ventas - a.ventas);
-  }, [salesForChartsAndCommissions, allAdvisers]);
-
-  // Dynamic Chart 2: Product Chart (Uses salesForChartsAndCommissions)
-  const productChartData = useMemo(() => {
-    const map: Record<string, { producto: string; linea: string; monto: number; cantidad: number }> = {};
-
-    salesForChartsAndCommissions.forEach(s => {
-      const prodName = s.producto || "Otros";
-      if (!map[prodName]) {
-        const isUp = isUpContaSale(s);
-        map[prodName] = { producto: prodName, linea: isUp ? "UpConta" : "Firmas", monto: 0, cantidad: 0 };
-      }
-      map[prodName].monto += s.totalSinIva;
-      map[prodName].cantidad += 1;
-    });
-
-    return Object.values(map).sort((a, b) => b.monto - a.monto);
-  }, [salesForChartsAndCommissions]);
-
-  // 3 NEW WEEKLY QUANTITY CHARTS (General, UpConta, Firmas)
-  const weeklyDataGeneral = useMemo(() => {
-    const weeks = [1, 2, 3, 4, 5].map(w => ({
-      semana: `Semana ${w}`,
-      weekNum: w,
-      cantidadVentas: 0,
-      cantidadProductos: 0
-    }));
-
-    salesForChartsAndCommissions.forEach(s => {
-      const wInfo = getFridayToThursdayWeek(s.fecha);
-      const idx = wInfo.weekNumber - 1;
-      if (weeks[idx]) {
-        weeks[idx].cantidadVentas += 1;
-        weeks[idx].cantidadProductos += 1;
-      }
-    });
-
-    return weeks;
-  }, [salesForChartsAndCommissions]);
-
-  const weeklyDataUpConta = useMemo(() => {
-    const weeks = [1, 2, 3, 4, 5].map(w => ({
-      semana: `Semana ${w}`,
-      weekNum: w,
-      cantidadVentas: 0,
-      cantidadProductos: 0
-    }));
-
-    salesForChartsAndCommissions.filter(isUpContaSale).forEach(s => {
-      const wInfo = getFridayToThursdayWeek(s.fecha);
-      const idx = wInfo.weekNumber - 1;
-      if (weeks[idx]) {
-        weeks[idx].cantidadVentas += 1;
-        weeks[idx].cantidadProductos += 1;
-      }
-    });
-
-    return weeks;
-  }, [salesForChartsAndCommissions]);
-
-  const weeklyDataFirmas = useMemo(() => {
-    const weeks = [1, 2, 3, 4, 5].map(w => ({
-      semana: `Semana ${w}`,
-      weekNum: w,
-      cantidadVentas: 0,
-      cantidadProductos: 0
-    }));
-
-    salesForChartsAndCommissions.filter(s => !isUpContaSale(s)).forEach(s => {
-      const wInfo = getFridayToThursdayWeek(s.fecha);
-      const idx = wInfo.weekNumber - 1;
-      if (weeks[idx]) {
-        weeks[idx].cantidadVentas += 1;
-        weeks[idx].cantidadProductos += 1;
-      }
-    });
-
-    return weeks;
-  }, [salesForChartsAndCommissions]);
-
-  // 4th COMPARATIVE MODULE BETWEEN MONTHS, WEEKS AND DATE RANGES
-  const comparativeMetrics = useMemo(() => {
-    let salesA: SaleTransaction[] = [];
-    let salesB: SaleTransaction[] = [];
-    let labelA = "";
-    let labelB = "";
-
-    const matchesCategory = (item: SaleTransaction) => {
-      if (compCategory !== "all") {
-        const isUp = isUpContaSale(item);
-        if (compCategory === "upconta" && !isUp) return false;
-        if (compCategory === "firmas" && isUp) return false;
-      }
-      return true;
-    };
-
-    if (compFilterMode === "mes_semana") {
-      labelA = `${getSpanishMonthLabel(compMonthA)}${compWeek !== "all" ? ` (Sem ${compWeek})` : ""}`;
-      labelB = `${getSpanishMonthLabel(compMonthB)}${compWeek !== "all" ? ` (Sem ${compWeek})` : ""}`;
-
-      const filterFn = (item: SaleTransaction, targetMonth: string) => {
-        if (!matchesCategory(item)) return false;
-        if (!matchMonthFilter(item, targetMonth)) return false;
-        if (compWeek !== "all") {
-          const wInfo = getFridayToThursdayWeek(item.fecha);
-          if (wInfo.weekNumber !== parseInt(compWeek, 10)) return false;
-        }
-        return true;
-      };
-
-      salesA = baseSales.filter(s => filterFn(s, compMonthA));
-      salesB = baseSales.filter(s => filterFn(s, compMonthB));
-    } else {
-      // Custom Date Range Comparison
-      const formatDisplayDate = (dStr: string) => {
-        if (!dStr) return "";
-        const [y, m, d] = dStr.split("-");
-        return `${d}/${m}/${y}`;
-      };
-
-      labelA = compStartDateA && compEndDateA
-        ? `Rango A (${formatDisplayDate(compStartDateA)} - ${formatDisplayDate(compEndDateA)})`
-        : "Período A";
-      labelB = compStartDateB && compEndDateB
-        ? `Rango B (${formatDisplayDate(compStartDateB)} - ${formatDisplayDate(compEndDateB)})`
-        : "Período B";
-
-      const filterRange = (item: SaleTransaction, start: string, end: string) => {
-        if (!matchesCategory(item)) return false;
-        const f = item.fecha || "";
-        if (start && f < start) return false;
-        if (end && f > end) return false;
-        return true;
-      };
-
-      salesA = baseSales.filter(s => filterRange(s, compStartDateA, compEndDateA));
-      salesB = baseSales.filter(s => filterRange(s, compStartDateB, compEndDateB));
-    }
-
-    const getStats = (salesList: SaleTransaction[]) => {
-      const up = salesList.filter(isUpContaSale);
-      const fir = salesList.filter(s => !isUpContaSale(s));
-      const totalMonto = salesList.reduce((acc, curr) => acc + curr.totalSinIva, 0);
-      const totalUpMonto = up.reduce((acc, curr) => acc + curr.totalSinIva, 0);
-      const totalFirMonto = fir.reduce((acc, curr) => acc + curr.totalSinIva, 0);
-      const qtyTotal = salesList.length;
-      const qtyUp = up.length;
-      const qtyFir = fir.length;
-      const ticket = qtyTotal > 0 ? totalMonto / qtyTotal : 0;
-
-      return {
-        totalMonto,
-        totalUpMonto,
-        totalFirMonto,
-        qtyTotal,
-        qtyUp,
-        qtyFir,
-        ticket
-      };
-    };
-
-    const statsA = getStats(salesA);
-    const statsB = getStats(salesB);
-
-    return {
-      labelA,
-      labelB,
-      statsA,
-      statsB,
-      chartData: [
-        {
-          metric: "UpConta ($)",
-          periodoA: statsA.totalUpMonto,
-          periodoB: statsB.totalUpMonto,
-          [compMonthA]: statsA.totalUpMonto,
-          [compMonthB]: statsB.totalUpMonto
-        },
-        {
-          metric: "Firmas.ec ($)",
-          periodoA: statsA.totalFirMonto,
-          periodoB: statsB.totalFirMonto,
-          [compMonthA]: statsA.totalFirMonto,
-          [compMonthB]: statsB.totalFirMonto
-        },
-        {
-          metric: "Ventas Totales ($)",
-          periodoA: statsA.totalMonto,
-          periodoB: statsB.totalMonto,
-          [compMonthA]: statsA.totalMonto,
-          [compMonthB]: statsB.totalMonto
-        }
-      ]
-    };
-  }, [
-    sales,
-    compFilterMode,
-    compMonthA,
-    compMonthB,
-    compWeek,
-    compCategory,
-    compStartDateA,
-    compEndDateA,
-    compStartDateB,
-    compEndDateB
-  ]);
-
-  // Advisers columns for dynamic report tables based on companyMode
-  const activeReportAdvisers = useMemo(() => {
-    if (companyMode === "upconta") {
-      return [
-        { key: "karlaHaro", name: "Karla Haro" },
-        { key: "davidSantander", name: "David Santander" },
-      ];
-    }
-    if (companyMode === "firmas") {
-      return [
-        { key: "salomeEstrella", name: "Salomé Estrella" },
-        { key: "ismeniaEscalona", name: "Ismenia Escalona" },
-        { key: "evelynNarvaez", name: "Evelyn Narváez" },
-      ];
-    }
-    return [
-      { key: "karlaHaro", name: "Karla Haro" },
-      { key: "ismeniaEscalona", name: "Ismenia Escalona" },
-      { key: "salomeEstrella", name: "Salomé Estrella" },
-      { key: "evelynNarvaez", name: "Evelyn Narváez" },
-      { key: "davidSantander", name: "David Santander" },
-    ];
-  }, [companyMode]);
-
-  // Dynamic Table 1: Reporte por Producto Table (Sorted FIRMAS first, UPCONTA second)
-  const dynamicReportProduct = useMemo(() => {
-    const map: Record<string, { linea: "UPCONTA" | "FIRMAS"; producto: string; karlaHaro: number; ismeniaEscalona: number; salomeEstrella: number; evelynNarvaez: number; davidSantander: number; total: number }> = {};
-
-    filteredSales.forEach(s => {
-      const prodName = s.producto || "Otros";
-      const isUp = isUpContaSale(s);
-      const lineaStr: "UPCONTA" | "FIRMAS" = isUp ? "UPCONTA" : "FIRMAS";
-      const key = `${lineaStr}_${prodName}`;
-
-      if (!map[key]) {
-        map[key] = {
-          linea: lineaStr,
-          producto: prodName,
-          karlaHaro: 0,
-          ismeniaEscalona: 0,
-          salomeEstrella: 0,
-          evelynNarvaez: 0,
-          davidSantander: 0,
-          total: 0
-        };
-      }
-
-      const advClean = s.asesor.toLowerCase();
-      if (advClean.includes("karla")) map[key].karlaHaro += s.totalSinIva;
-      else if (advClean.includes("ismenia")) map[key].ismeniaEscalona += s.totalSinIva;
-      else if (advClean.includes("salom")) map[key].salomeEstrella += s.totalSinIva;
-      else if (advClean.includes("evelyn")) map[key].evelynNarvaez += s.totalSinIva;
-      else if (advClean.includes("david")) map[key].davidSantander += s.totalSinIva;
-
-      map[key].total += s.totalSinIva;
-    });
-
-    // Sort: FIRMAS products FIRST, UPCONTA products SECOND
-    return Object.values(map).sort((a, b) => {
-      if (a.linea !== b.linea) {
-        return a.linea === "FIRMAS" ? -1 : 1;
-      }
-      return b.total - a.total;
-    });
-  }, [filteredSales]);
+  const totalVentasConvenios = useMemo(() => salesConvenios.reduce((acc, curr) => acc + (Number(curr.totalSinIva) || (Number(curr.total) ? Number(curr.total) / 1.15 : 0) || 0), 0), [salesConvenios]);
+  const totalVentasConveniosConIva = useMemo(() => salesConvenios.reduce((acc, curr) => acc + (Number(curr.total) || (Number(curr.totalSinIva) ? Number(curr.totalSinIva) * 1.15 : 0) || 0), 0), [salesConvenios]);
+  const cantidadConvenios = salesConvenios.length;
+  const ticketPromedioConvenios = cantidadConvenios > 0 ? totalVentasConvenios / cantidadConvenios : 0;
 
   // Formatters
   const formatCurrency = (val: number) => {
@@ -1033,112 +721,531 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
     }).format(val);
   };
 
+  // Additional state for plan table search
+  const [planSearch, setPlanSearch] = useState<string>("");
+
+  const isGeneralDashboard = (companyMode === "all" || companyMode === "locked") && selectedCategory === "all";
+  const showBothProducts = isGeneralDashboard;
+  const isAllYear = !selectedMonth || selectedMonth === "all_year" || selectedMonth === "all";
+
+  // 1. Channel Totals based on filteredSales with UpConta, Firmas & Convenios breakdown
+  const channelTotals = useMemo(() => {
+    const totals = {
+      nueva: { 
+        count: 0, sinIva: 0, conIva: 0, 
+        upcontaCount: 0, upcontaMonto: 0, 
+        firmasCount: 0, firmasMonto: 0,
+        firmasNormalCount: 0, firmasNormalMonto: 0,
+        conveniosCount: 0, conveniosMonto: 0
+      },
+      renovacion: { 
+        count: 0, sinIva: 0, conIva: 0, 
+        upcontaCount: 0, upcontaMonto: 0, 
+        firmasCount: 0, firmasMonto: 0,
+        firmasNormalCount: 0, firmasNormalMonto: 0,
+        conveniosCount: 0, conveniosMonto: 0
+      },
+      socio: { 
+        count: 0, sinIva: 0, conIva: 0, 
+        upcontaCount: 0, upcontaMonto: 0, 
+        firmasCount: 0, firmasMonto: 0,
+        firmasNormalCount: 0, firmasNormalMonto: 0,
+        conveniosCount: 0, conveniosMonto: 0
+      },
+      distribuidor: { 
+        count: 0, sinIva: 0, conIva: 0, 
+        upcontaCount: 0, upcontaMonto: 0, 
+        firmasCount: 0, firmasMonto: 0,
+        firmasNormalCount: 0, firmasNormalMonto: 0,
+        conveniosCount: 0, conveniosMonto: 0
+      }
+    };
+
+    filteredSales.forEach((item) => {
+      const ch = getSaleChannel(item);
+      const sinIva = Number(item.totalSinIva) || (Number(item.total) ? Number(item.total) / 1.15 : 0) || 0;
+      const conIva = Number(item.total) || (Number(item.totalSinIva) ? Number(item.totalSinIva) * 1.15 : 0) || 0;
+      const isUp = isUpContaSale(item);
+      const isConv = isConvenioSale(item);
+
+      totals[ch].count++;
+      totals[ch].sinIva += sinIva;
+      totals[ch].conIva += conIva;
+
+      if (isUp) {
+        totals[ch].upcontaCount++;
+        totals[ch].upcontaMonto += sinIva;
+      } else {
+        totals[ch].firmasCount++;
+        totals[ch].firmasMonto += sinIva;
+
+        if (isConv) {
+          totals[ch].conveniosCount++;
+          totals[ch].conveniosMonto += sinIva;
+        } else {
+          totals[ch].firmasNormalCount++;
+          totals[ch].firmasNormalMonto += sinIva;
+        }
+      }
+    });
+
+    return totals;
+  }, [filteredSales]);
+
+  // 2. Monthly Channel Data (12 months comparative for Nuevas, Renovaciones, Socios, Distribuidores)
+  // Each channel has separate UpConta, Firmas & Convenios counts
+  const monthlyChannelData = useMemo(() => {
+    const eligibleSales = baseSales.filter((item) => {
+      if (selectedAdviser !== "all" && item.asesor.toLowerCase() !== selectedAdviser.toLowerCase()) {
+        return false;
+      }
+      if (selectedCategory !== "all") {
+        const isUp = isUpContaSale(item);
+        const isConv = isConvenioSale(item);
+        if (selectedCategory === "upconta" && !isUp) return false;
+        if (selectedCategory === "firmas" && isUp) return false;
+        if (selectedCategory === "solo_firmas" && (isUp || isConv)) return false;
+        if (selectedCategory === "solo_convenios" && (isUp || !isConv)) return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const match =
+          item.nombre.toLowerCase().includes(q) ||
+          item.ruc.toLowerCase().includes(q) ||
+          item.asesor.toLowerCase().includes(q) ||
+          item.producto.toLowerCase().includes(q) ||
+          item.plan.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+
+    const monthMap: Record<number, {
+      mes: string;
+      fullName: string;
+      mesNum: number;
+      nuevasUpconta: number;
+      nuevasFirmas: number;
+      nuevasFirmasNormal: number;
+      nuevasConvenios: number;
+      nuevasTotal: number;
+      renovUpconta: number;
+      renovFirmas: number;
+      renovFirmasNormal: number;
+      renovConvenios: number;
+      renovTotal: number;
+      sociosUpconta: number;
+      sociosFirmas: number;
+      sociosFirmasNormal: number;
+      sociosConvenios: number;
+      sociosTotal: number;
+      distUpconta: number;
+      distFirmas: number;
+      distFirmasNormal: number;
+      distConvenios: number;
+      distTotal: number;
+    }> = {};
+
+    MONTHS_LIST.forEach((m) => {
+      monthMap[m.num] = {
+        mes: m.short,
+        fullName: m.name,
+        mesNum: m.num,
+        nuevasUpconta: 0,
+        nuevasFirmas: 0,
+        nuevasFirmasNormal: 0,
+        nuevasConvenios: 0,
+        nuevasTotal: 0,
+        renovUpconta: 0,
+        renovFirmas: 0,
+        renovFirmasNormal: 0,
+        renovConvenios: 0,
+        renovTotal: 0,
+        sociosUpconta: 0,
+        sociosFirmas: 0,
+        sociosFirmasNormal: 0,
+        sociosConvenios: 0,
+        sociosTotal: 0,
+        distUpconta: 0,
+        distFirmas: 0,
+        distFirmasNormal: 0,
+        distConvenios: 0,
+        distTotal: 0
+      };
+    });
+
+    eligibleSales.forEach((item) => {
+      const norm = normalizeDateString(item.fecha);
+      if (!norm) return;
+      const parts = norm.split("-");
+      if (parts.length < 2) return;
+      const mNum = parseInt(parts[1], 10);
+      if (mNum >= 1 && mNum <= 12 && monthMap[mNum]) {
+        const ch = getSaleChannel(item);
+        const isUp = isUpContaSale(item);
+        const isConv = isConvenioSale(item);
+
+        if (ch === "nueva") {
+          if (isUp) {
+            monthMap[mNum].nuevasUpconta++;
+          } else {
+            monthMap[mNum].nuevasFirmas++;
+            if (isConv) monthMap[mNum].nuevasConvenios++;
+            else monthMap[mNum].nuevasFirmasNormal++;
+          }
+          monthMap[mNum].nuevasTotal++;
+        } else if (ch === "renovacion") {
+          if (isUp) {
+            monthMap[mNum].renovUpconta++;
+          } else {
+            monthMap[mNum].renovFirmas++;
+            if (isConv) monthMap[mNum].renovConvenios++;
+            else monthMap[mNum].renovFirmasNormal++;
+          }
+          monthMap[mNum].renovTotal++;
+        } else if (ch === "socio") {
+          if (isUp) {
+            monthMap[mNum].sociosUpconta++;
+          } else {
+            monthMap[mNum].sociosFirmas++;
+            if (isConv) monthMap[mNum].sociosConvenios++;
+            else monthMap[mNum].sociosFirmasNormal++;
+          }
+          monthMap[mNum].sociosTotal++;
+        } else if (ch === "distribuidor") {
+          if (isUp) {
+            monthMap[mNum].distUpconta++;
+          } else {
+            monthMap[mNum].distFirmas++;
+            if (isConv) monthMap[mNum].distConvenios++;
+            else monthMap[mNum].distFirmasNormal++;
+          }
+          monthMap[mNum].distTotal++;
+        }
+      }
+    });
+
+    return MONTHS_LIST.map((m) => monthMap[m.num]);
+  }, [baseSales, selectedAdviser, selectedCategory, searchQuery]);
+
+  // Selected month number for highlighting in monthly charts
+  const activeMonthNum = useMemo(() => {
+    if (!selectedMonth || selectedMonth === "all_year" || selectedMonth === "all") return null;
+    const mLower = selectedMonth.toLowerCase();
+    const monthsEn = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+    for (let i = 0; i < monthsEn.length; i++) {
+      if (mLower.includes(monthsEn[i])) return i + 1;
+    }
+    return null;
+  }, [selectedMonth]);
+
+  // 3. Channel Comparison Bar Data (with separate UpConta, Firmas & Convenios bars)
+  const channelComparisonBarData = useMemo(() => {
+    return [
+      {
+        canal: "Nuevas",
+        key: "nueva",
+        upcontaCantidad: channelTotals.nueva.upcontaCount,
+        upcontaMonto: channelTotals.nueva.upcontaMonto,
+        firmasCantidad: channelTotals.nueva.firmasCount,
+        firmasMonto: channelTotals.nueva.firmasMonto,
+        firmasNormalCantidad: channelTotals.nueva.firmasNormalCount,
+        firmasNormalMonto: channelTotals.nueva.firmasNormalMonto,
+        conveniosCantidad: channelTotals.nueva.conveniosCount,
+        conveniosMonto: channelTotals.nueva.conveniosMonto,
+        totalCantidad: channelTotals.nueva.count,
+        totalMonto: channelTotals.nueva.sinIva,
+        pct: cantidadVentas > 0 ? (channelTotals.nueva.count / cantidadVentas) * 100 : 0
+      },
+      {
+        canal: "Renovaciones",
+        key: "renovacion",
+        upcontaCantidad: channelTotals.renovacion.upcontaCount,
+        upcontaMonto: channelTotals.renovacion.upcontaMonto,
+        firmasCantidad: channelTotals.renovacion.firmasCount,
+        firmasMonto: channelTotals.renovacion.firmasMonto,
+        firmasNormalCantidad: channelTotals.renovacion.firmasNormalCount,
+        firmasNormalMonto: channelTotals.renovacion.firmasNormalMonto,
+        conveniosCantidad: channelTotals.renovacion.conveniosCount,
+        conveniosMonto: channelTotals.renovacion.conveniosMonto,
+        totalCantidad: channelTotals.renovacion.count,
+        totalMonto: channelTotals.renovacion.sinIva,
+        pct: cantidadVentas > 0 ? (channelTotals.renovacion.count / cantidadVentas) * 100 : 0
+      },
+      {
+        canal: "Socios",
+        key: "socio",
+        upcontaCantidad: channelTotals.socio.upcontaCount,
+        upcontaMonto: channelTotals.socio.upcontaMonto,
+        firmasCantidad: channelTotals.socio.firmasCount,
+        firmasMonto: channelTotals.socio.firmasMonto,
+        firmasNormalCantidad: channelTotals.socio.firmasNormalCount,
+        firmasNormalMonto: channelTotals.socio.firmasNormalMonto,
+        conveniosCantidad: channelTotals.socio.conveniosCount,
+        conveniosMonto: channelTotals.socio.conveniosMonto,
+        totalCantidad: channelTotals.socio.count,
+        totalMonto: channelTotals.socio.sinIva,
+        pct: cantidadVentas > 0 ? (channelTotals.socio.count / cantidadVentas) * 100 : 0
+      },
+      {
+        canal: "Distribuidores",
+        key: "distribuidor",
+        upcontaCantidad: channelTotals.distribuidor.upcontaCount,
+        upcontaMonto: channelTotals.distribuidor.upcontaMonto,
+        firmasCantidad: channelTotals.distribuidor.firmasCount,
+        firmasMonto: channelTotals.distribuidor.firmasMonto,
+        firmasNormalCantidad: channelTotals.distribuidor.firmasNormalCount,
+        firmasNormalMonto: channelTotals.distribuidor.firmasNormalMonto,
+        conveniosCantidad: channelTotals.distribuidor.conveniosCount,
+        conveniosMonto: channelTotals.distribuidor.conveniosMonto,
+        totalCantidad: channelTotals.distribuidor.count,
+        totalMonto: channelTotals.distribuidor.sinIva,
+        pct: cantidadVentas > 0 ? (channelTotals.distribuidor.count / cantidadVentas) * 100 : 0
+      }
+    ];
+  }, [channelTotals, cantidadVentas]);
+
+  // 4. Product / Plan Breakdown Rows
+  const productPlanRows = useMemo(() => {
+    const map: Record<string, {
+      plan: string;
+      producto: string;
+      nuevas: number;
+      renovaciones: number;
+      socios: number;
+      distribuidores: number;
+      cantidad: number;
+      montoSinIva: number;
+      totalConIva: number;
+      ticketPromedio: number;
+      firmasNormalCount: number;
+      conveniosCount: number;
+      conveniosMonto: number;
+    }> = {};
+
+    filteredSales.forEach((item) => {
+      const rawPlan = (item.plan || "Sin Plan").trim();
+      if (!map[rawPlan]) {
+        map[rawPlan] = {
+          plan: rawPlan,
+          producto: item.producto || "",
+          nuevas: 0,
+          renovaciones: 0,
+          socios: 0,
+          distribuidores: 0,
+          cantidad: 0,
+          montoSinIva: 0,
+          totalConIva: 0,
+          ticketPromedio: 0,
+          firmasNormalCount: 0,
+          conveniosCount: 0,
+          conveniosMonto: 0
+        };
+      }
+
+      const ch = getSaleChannel(item);
+      const sinIva = Number(item.totalSinIva) || (Number(item.total) ? Number(item.total) / 1.15 : 0) || 0;
+      const conIva = Number(item.total) || (Number(item.totalSinIva) ? Number(item.totalSinIva) * 1.15 : 0) || 0;
+      const isConv = isConvenioSale(item);
+
+      map[rawPlan].cantidad++;
+      map[rawPlan].montoSinIva += sinIva;
+      map[rawPlan].totalConIva += conIva;
+
+      if (isConv) {
+        map[rawPlan].conveniosCount++;
+        map[rawPlan].conveniosMonto += sinIva;
+      } else {
+        map[rawPlan].firmasNormalCount++;
+      }
+
+      if (ch === "nueva") map[rawPlan].nuevas++;
+      else if (ch === "renovacion") map[rawPlan].renovaciones++;
+      else if (ch === "socio") map[rawPlan].socios++;
+      else if (ch === "distribuidor") map[rawPlan].distribuidores++;
+    });
+
+    return Object.values(map)
+      .map((row) => ({
+        ...row,
+        ticketPromedio: row.cantidad > 0 ? row.montoSinIva / row.cantidad : 0
+      }))
+      .sort((a, b) => b.totalConIva - a.totalConIva);
+  }, [filteredSales]);
+
+  const filteredProductPlanRows = useMemo(() => {
+    if (!planSearch.trim()) return productPlanRows;
+    const q = planSearch.toLowerCase();
+    return productPlanRows.filter(
+      (r) => r.plan.toLowerCase().includes(q) || r.producto.toLowerCase().includes(q)
+    );
+  }, [productPlanRows, planSearch]);
+
+  // 5. Dynamic Evolution Data:
+  // - Mensual (Ene ... Dic) cuando se elige consolidado del año ("all_year")
+  // - Semanal (Semana 1 ... Semana 5) cuando se elige un mes específico
+  // - Con 2 líneas (UpConta naranja, Firmas azul en dashboard general; o Firmas azul y Convenios morado en 1998)
+  const evolutionChartData = useMemo(() => {
+    if (isAllYear) {
+      // 12 Months Evolution
+      const monthMap: Record<number, {
+        periodo: string;
+        label: string;
+        upcontaCantidad: number;
+        firmasCantidad: number;
+        firmasNormalCantidad: number;
+        conveniosCantidad: number;
+        totalCantidad: number;
+        upcontaMonto: number;
+        firmasMonto: number;
+        firmasNormalMonto: number;
+        conveniosMonto: number;
+        totalMonto: number;
+      }> = {};
+
+      MONTHS_LIST.forEach((m) => {
+        monthMap[m.num] = {
+          periodo: m.short,
+          label: m.name,
+          upcontaCantidad: 0,
+          firmasCantidad: 0,
+          firmasNormalCantidad: 0,
+          conveniosCantidad: 0,
+          totalCantidad: 0,
+          upcontaMonto: 0,
+          firmasMonto: 0,
+          firmasNormalMonto: 0,
+          conveniosMonto: 0,
+          totalMonto: 0
+        };
+      });
+
+      filteredSales.forEach((item) => {
+        const norm = normalizeDateString(item.fecha);
+        if (!norm) return;
+        const parts = norm.split("-");
+        if (parts.length < 2) return;
+        const mNum = parseInt(parts[1], 10);
+        if (mNum >= 1 && mNum <= 12 && monthMap[mNum]) {
+          const isUp = isUpContaSale(item);
+          const isConv = isConvenioSale(item);
+          const sinIva = Number(item.totalSinIva) || (Number(item.total) ? Number(item.total) / 1.15 : 0) || 0;
+
+          if (isUp) {
+            monthMap[mNum].upcontaCantidad++;
+            monthMap[mNum].upcontaMonto += sinIva;
+          } else {
+            monthMap[mNum].firmasCantidad++;
+            monthMap[mNum].firmasMonto += sinIva;
+            if (isConv) {
+              monthMap[mNum].conveniosCantidad++;
+              monthMap[mNum].conveniosMonto += sinIva;
+            } else {
+              monthMap[mNum].firmasNormalCantidad++;
+              monthMap[mNum].firmasNormalMonto += sinIva;
+            }
+          }
+          monthMap[mNum].totalCantidad++;
+          monthMap[mNum].totalMonto += sinIva;
+        }
+      });
+
+      return MONTHS_LIST.map((m) => monthMap[m.num]);
+    } else {
+      // 5 Friday-to-Thursday weeks of the selected month
+      const weeksMap: Record<number, {
+        periodo: string;
+        label: string;
+        upcontaCantidad: number;
+        firmasCantidad: number;
+        firmasNormalCantidad: number;
+        conveniosCantidad: number;
+        totalCantidad: number;
+        upcontaMonto: number;
+        firmasMonto: number;
+        firmasNormalMonto: number;
+        conveniosMonto: number;
+        totalMonto: number;
+      }> = {
+        1: { periodo: "Semana 1", label: "Semana 1", upcontaCantidad: 0, firmasCantidad: 0, firmasNormalCantidad: 0, conveniosCantidad: 0, totalCantidad: 0, upcontaMonto: 0, firmasMonto: 0, firmasNormalMonto: 0, conveniosMonto: 0, totalMonto: 0 },
+        2: { periodo: "Semana 2", label: "Semana 2", upcontaCantidad: 0, firmasCantidad: 0, firmasNormalCantidad: 0, conveniosCantidad: 0, totalCantidad: 0, upcontaMonto: 0, firmasMonto: 0, firmasNormalMonto: 0, conveniosMonto: 0, totalMonto: 0 },
+        3: { periodo: "Semana 3", label: "Semana 3", upcontaCantidad: 0, firmasCantidad: 0, firmasNormalCantidad: 0, conveniosCantidad: 0, totalCantidad: 0, upcontaMonto: 0, firmasMonto: 0, firmasNormalMonto: 0, conveniosMonto: 0, totalMonto: 0 },
+        4: { periodo: "Semana 4", label: "Semana 4", upcontaCantidad: 0, firmasCantidad: 0, firmasNormalCantidad: 0, conveniosCantidad: 0, totalCantidad: 0, upcontaMonto: 0, firmasMonto: 0, firmasNormalMonto: 0, conveniosMonto: 0, totalMonto: 0 },
+        5: { periodo: "Semana 5", label: "Semana 5", upcontaCantidad: 0, firmasCantidad: 0, firmasNormalCantidad: 0, conveniosCantidad: 0, totalCantidad: 0, upcontaMonto: 0, firmasMonto: 0, firmasNormalMonto: 0, conveniosMonto: 0, totalMonto: 0 }
+      };
+
+      filteredSales.forEach((item) => {
+        const wInfo = getFridayToThursdayWeek(item.fecha);
+        const w = wInfo.weekNumber;
+        if (weeksMap[w]) {
+          const isUp = isUpContaSale(item);
+          const isConv = isConvenioSale(item);
+          const sinIva = Number(item.totalSinIva) || (Number(item.total) ? Number(item.total) / 1.15 : 0) || 0;
+
+          if (isUp) {
+            weeksMap[w].upcontaCantidad++;
+            weeksMap[w].upcontaMonto += sinIva;
+          } else {
+            weeksMap[w].firmasCantidad++;
+            weeksMap[w].firmasMonto += sinIva;
+            if (isConv) {
+              weeksMap[w].conveniosCantidad++;
+              weeksMap[w].conveniosMonto += sinIva;
+            } else {
+              weeksMap[w].firmasNormalCantidad++;
+              weeksMap[w].firmasNormalMonto += sinIva;
+            }
+          }
+          weeksMap[w].totalCantidad++;
+          weeksMap[w].totalMonto += sinIva;
+        }
+      });
+
+      return [1, 2, 3, 4, 5].map((w) => weeksMap[w]);
+    }
+  }, [filteredSales, isAllYear]);
+
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto pb-12">
-      {/* ================= COMPANY PROFILE BANNER ================= */}
-      {companyMode === "upconta" ? (
-        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-4 sm:p-5 rounded-2xl shadow-md border border-orange-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-orange-500 text-white font-black shadow-sm">
-              <Building2 className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
-                  Dashboard Comercial UpConta (Planes &amp; ERP)
-                </h2>
-                <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-2xs">
-                  Empresa: UpConta (170622)
-                </span>
-              </div>
-              <p className="text-xs text-orange-200/90 font-medium mt-0.5">
-                Métricas exclusivas de la línea UpConta • Asesores asignados: <strong className="text-white">Karla Haro</strong> y <strong className="text-white">David Santander</strong>
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : companyMode === "firmas" ? (
-        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-4 sm:p-5 rounded-2xl shadow-md border border-amber-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-400 text-slate-950 font-black shadow-sm">
-              <FileCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
-                  Dashboard Comercial ANF AC (Firmas Electrónicas)
-                </h2>
-                <span className="bg-amber-400 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-2xs">
-                  Empresa: ANF AC (123456)
-                </span>
-              </div>
-              <p className="text-xs text-amber-200/90 font-medium mt-0.5">
-                Métricas exclusivas de Firmas Electrónicas • Asesoras asignadas: <strong className="text-white">Salomé Estrella</strong>, <strong className="text-white">Ismenia Escalona</strong> y <strong className="text-white">Evelyn Narváez</strong>
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white p-4 sm:p-5 rounded-2xl shadow-md border border-blue-500/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-500 text-white font-black shadow-sm">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
-                  Dashboard Ejecutivo Consolidado (UpConta &amp; ANF AC)
-                </h2>
-                <span className="bg-blue-400 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-2xs">
-                  Vista Total / Super Admin (0000)
-                </span>
-              </div>
-              <p className="text-xs text-blue-200/90 font-medium mt-0.5">
-                Visualización consolidada de todas las empresas, líneas de productos y equipo comercial completo.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= TOP SYNC BAR ================= */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm">
-        <div className="flex items-center flex-wrap gap-2.5">
-          <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            Google Sheets Sincronizado
-          </span>
-          <span className="text-xs font-extrabold text-slate-700 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-            {sales.length} Ventas Totales en Base de Datos
-          </span>
-          {lastSyncTime && (
-            <span className="text-slate-500 text-xs flex items-center gap-1 font-medium">
-              <Clock className="w-3.5 h-3.5 text-amber-500" />
-              Última sinc: {lastSyncTime}
-            </span>
-          )}
-        </div>
-
-        <button
-          onClick={() => fetchGoogleSheetData(true)}
-          disabled={isLoading}
-          className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs transition-all shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-          <span>{isLoading ? "Actualizando..." : "Refrescar Google Sheets"}</span>
-        </button>
-      </div>
-
       {/* ================= CONTROLS & FILTERS BAR ================= */}
       <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
-          <div className="flex items-center gap-2 font-black text-slate-800 text-sm uppercase tracking-wider">
-            <Filter className="w-4 h-4 text-orange-500" />
-            <span>Filtros Integrados de Análisis</span>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2 font-black text-slate-800 text-sm uppercase tracking-wider">
+              <Filter className="w-4 h-4 text-orange-500" />
+              <span>Filtros Integrados de Análisis</span>
+            </div>
+            {companyMode === "upconta" && (
+              <span className="bg-orange-100 text-orange-800 border border-orange-300 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                UpConta (170622)
+              </span>
+            )}
+            {companyMode === "firmas" && (
+              <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                {isAccess1998 ? "Firmas ANF & Convenios (1998)" : "Firmas ANF (123456)"}
+              </span>
+            )}
+            {companyMode === "all" && (
+              <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                Super Admin (0000)
+              </span>
+            )}
           </div>
 
-          <div className="text-xs text-slate-500 font-medium">
-            Filtradas: <strong className="text-slate-900">{filteredSales.length}</strong> de <strong className="text-slate-900">{sales.length}</strong> ventas
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs text-slate-500 font-medium">
+              Filtradas: <strong className="text-slate-900">{filteredSales.length}</strong> de <strong className="text-slate-900">{sales.length}</strong> ventas
+            </span>
+
+            <button
+              onClick={() => fetchGoogleSheetData(true)}
+              disabled={isLoading}
+              className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Sincronizar datos con Google Sheets"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+              <span>{isLoading ? "Sincronizando..." : "Sincronizar Sheets"}</span>
+            </button>
           </div>
         </div>
 
@@ -1188,7 +1295,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
             </select>
           </div>
 
-          {/* Filter 3: Conditional Week / Date Range */}
+          {/* Filter 3: Conditional Week / Date Range / Search */}
           {timeFilter === "semana" ? (
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
@@ -1254,10 +1361,16 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              disabled={companyMode === "upconta" || companyMode === "firmas"}
+              disabled={!isAccess1998 && (companyMode === "upconta" || companyMode === "firmas")}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none disabled:opacity-80"
             >
-              {companyMode === "upconta" ? (
+              {isAccess1998 ? (
+                <>
+                  <option value="firmas">Todas las Ventas (Firmas &amp; Convenios)</option>
+                  <option value="solo_firmas">Solo Ventas Firmas (&le; $100)</option>
+                  <option value="solo_convenios">Solo Venta Convenios (&gt; $100)</option>
+                </>
+              ) : companyMode === "upconta" ? (
                 <option value="upconta">Solo Línea UpConta (Sistemas &amp; ERP)</option>
               ) : companyMode === "firmas" ? (
                 <option value="firmas">Solo Línea Firmas Electrónicas.ec</option>
@@ -1299,11 +1412,11 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
         </div>
       </div>
 
-      {/* ================= 9 EXECUTIVE KPI SCORECARDS (3 ROWS OF 3 MATCHING BRAND COLORS) ================= */}
+      {/* ================= REGISTROS PRINCIPALES DE VENTAS (TOTAL FACTURADOS, CANTIDAD, TICKET, TOTAL UPCONTA Y FIRMAS) ================= */}
       <div className="space-y-4">
-        {/* ROW 1: TOTAL GENERAL METRICS */}
+        {/* ROW 1: TOTAL FACTURADOS, CANTIDAD Y TICKET PROMEDIO */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Card 1: Total Ventas */}
+          {/* 1. TOTAL FACTURADOS */}
           <div className="bg-gradient-to-br from-slate-900 via-[#0B2545] to-slate-900 text-white rounded-2xl p-5 shadow-lg border border-slate-800 relative overflow-hidden group hover:border-orange-500/50 transition-all">
             <div className="flex justify-between items-start">
               <div className="space-y-1.5">
@@ -1325,7 +1438,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
             </div>
           </div>
 
-          {/* Card 2: Cantidad de Ventas */}
+          {/* 2. CANTIDAD DE VENTAS */}
           <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-md border border-slate-200 relative overflow-hidden group hover:border-blue-400 transition-all">
             <div className="flex justify-between items-start">
               <div className="space-y-1">
@@ -1334,8 +1447,11 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
                   Cantidad de Ventas
                 </span>
                 <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                  {cantidadVentas} <span className="text-xs font-extrabold text-slate-500">transacciones</span>
+                  {cantidadVentas} <span className="text-xs font-extrabold text-slate-500">operaciones</span>
                 </div>
+                <p className="text-xs text-slate-500 font-medium pt-1">
+                  Total de transacciones comerciales registradas
+                </p>
               </div>
               <div className="p-3 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
                 <Layers className="w-6 h-6" />
@@ -1343,7 +1459,7 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
             </div>
           </div>
 
-          {/* Card 3: Ticket Promedio General */}
+          {/* 3. TICKET PROMEDIO */}
           <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-md border border-slate-200 relative overflow-hidden group hover:border-purple-400 transition-all">
             <div className="flex justify-between items-start">
               <div className="space-y-1">
@@ -1354,6 +1470,9 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
                 <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
                   {formatCurrency(ticketPromedio)}
                 </div>
+                <p className="text-xs text-slate-500 font-medium pt-1">
+                  Monto promedio facturado por venta
+                </p>
               </div>
               <div className="p-3 bg-purple-50 text-purple-600 rounded-xl border border-purple-100">
                 <Calculator className="w-6 h-6" />
@@ -1362,856 +1481,1133 @@ export function DashboardModule({ companyMode = "all" }: DashboardModuleProps) {
           </div>
         </div>
 
-        {/* ROW 2: LÍNEA UPCONTA (NARANJA Y AZUL) - Shown for UpConta and All modes */}
-        {(companyMode === "upconta" || companyMode === "all" || companyMode === "locked") && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Card 4: Total Ventas UpConta */}
-            <div className="bg-gradient-to-br from-[#0B2545] via-[#003566] to-[#0B2545] text-white rounded-2xl p-5 shadow-md border border-blue-500/40 relative overflow-hidden group hover:border-orange-400 transition-all">
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <span className="text-[11px] font-extrabold text-orange-400 uppercase tracking-wider flex items-center gap-1">
-                    <Building2 className="w-3.5 h-3.5 text-orange-400" />
-                    Total Ventas UpConta
-                  </span>
-                  <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                    {formatCurrency(totalVentasUpConta)}
-                  </div>
-                </div>
-                <div className="p-2.5 bg-orange-500/20 border border-orange-400/30 rounded-xl text-orange-400">
-                  <Building2 className="w-5 h-5" />
-                </div>
-              </div>
-            </div>
-
-            {/* Card 5: Cantidad Ventas UpConta */}
-            <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-orange-200 relative overflow-hidden group hover:border-orange-400 transition-all">
-              <div className="flex justify-between items-start">
-                <span className="text-[11px] font-extrabold text-orange-600 uppercase tracking-wider flex items-center gap-1">
-                  <Layers className="w-3.5 h-3.5 text-orange-500" />
-                  Cantidad Ventas UpConta
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                  {cantidadUpConta} <span className="text-xs font-extrabold text-slate-500">transacciones</span>
-                </div>
-              </div>
-              <div className="p-2 bg-orange-50 text-orange-600 rounded-lg border border-orange-100">
-                <Building2 className="w-5 h-5" />
-              </div>
-            </div>
-
-            {/* Card 6: Ticket Promedio UpConta */}
-            <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-blue-200 relative overflow-hidden group hover:border-blue-400 transition-all">
-              <div className="flex justify-between items-start">
-                <span className="text-[11px] font-extrabold text-blue-800 uppercase tracking-wider flex items-center gap-1">
-                  <Calculator className="w-3.5 h-3.5 text-blue-600" />
-                  Ticket Prom. UpConta
-                </span>
-                <div className="text-2xl font-black text-blue-950 tracking-tight">
-                  {formatCurrency(ticketPromedioUpConta)}
-                </div>
-              </div>
-              <div className="p-2 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
-                <Building2 className="w-4 h-4" />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ROW 3: LÍNEA FIRMAS ELECTRÓNICAS.EC (AZUL Y AMARILLO) - Shown for Firmas and All modes */}
-        {(companyMode === "firmas" || companyMode === "all" || companyMode === "locked") && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Card 7: Total Ventas Firmas */}
-            <div className="bg-gradient-to-br from-[#003366] via-[#002244] to-[#003366] text-white rounded-2xl p-5 shadow-md border border-amber-400/40 relative overflow-hidden group hover:border-amber-300 transition-all">
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <span className="text-[11px] font-extrabold text-amber-300 uppercase tracking-wider flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
-                    Total Ventas Firmas
-                  </span>
-                  <div className="text-2xl sm:text-3xl font-black text-amber-100 tracking-tight">
-                    {formatCurrency(totalVentasFirmas)}
-                  </div>
-                </div>
-                <div className="p-2.5 bg-amber-400/20 border border-amber-300/30 rounded-xl text-amber-300">
-                  <FileCheck className="w-5 h-5" />
-                </div>
-              </div>
-            </div>
-
-            {/* Card 8: Cantidad Ventas Firmas */}
-            <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-amber-200 relative overflow-hidden group hover:border-amber-400 transition-all">
-              <div className="flex justify-between items-start">
-                <span className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1">
-                  <Layers className="w-3.5 h-3.5 text-amber-600" />
-                  Cantidad Ventas Firmas
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                  {cantidadFirmas} <span className="text-xs font-extrabold text-slate-500">firmas</span>
-                </div>
-              </div>
-              <div className="p-2 bg-amber-50 text-amber-700 rounded-lg border border-amber-100">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-            </div>
-
-            {/* Card 9: Ticket Promedio Firmas */}
-            <div className="bg-white text-slate-800 rounded-2xl p-5 shadow-sm border border-slate-200 relative overflow-hidden group hover:border-amber-400 transition-all">
-              <div className="flex justify-between items-start">
-                <span className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1">
-                  <Calculator className="w-3.5 h-3.5 text-amber-600" />
-                  Ticket Prom. Firmas
-                </span>
-                <div className="text-2xl font-black text-slate-900 tracking-tight">
-                  {formatCurrency(ticketPromedioFirmas)}
-                </div>
-              </div>
-              <div className="p-2 bg-amber-50 text-amber-700 rounded-lg border border-amber-100">
-                <ShieldCheck className="w-4 h-4" />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ================= SUB-NAVIGATION TABS FOR DASHBOARD VIEWS ================= */}
-      <div className="flex items-center bg-slate-200/80 p-1.5 rounded-2xl border border-slate-300/80 gap-1 overflow-x-auto">
-        <button
-          onClick={() => setActiveViewTab("overview")}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeViewTab === "overview"
-              ? "bg-[#0B2545] text-white shadow-md"
-              : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
-          }`}
-        >
-          <BarChart3 className="w-4 h-4 text-orange-400" />
-          <span>Vista General (Gráficos)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveViewTab("crecimiento")}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeViewTab === "crecimiento"
-              ? "bg-[#0B2545] text-white shadow-md"
-              : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
-          }`}
-        >
-          <TrendingUp className="w-4 h-4 text-emerald-400" />
-          <span>Curva de Crecimiento (Ene - Dic)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveViewTab("producto")}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeViewTab === "producto"
-              ? "bg-[#0B2545] text-white shadow-md"
-              : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
-          }`}
-        >
-          <PieChartIcon className="w-4 h-4 text-emerald-400" />
-          <span>Reporte por Producto ($ y #)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveViewTab("detalle")}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeViewTab === "detalle"
-              ? "bg-[#0B2545] text-white shadow-md"
-              : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
-          }`}
-        >
-          <Table className="w-4 h-4 text-blue-400" />
-          <span>Detalle de Ventas ({filteredSales.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveViewTab("tabla_productos")}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeViewTab === "tabla_productos"
-              ? "bg-[#0B2545] text-white shadow-md"
-              : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
-          }`}
-        >
-          <ShoppingBag className="w-4 h-4 text-amber-400" />
-          <span>Tabla Consolidada de Productos</span>
-        </button>
-      </div>
-
-      {/* ================= VIEW 1: OVERVIEW CHARTS ================= */}
-      {activeViewTab === "overview" && (
-        <div className="space-y-8">
-          {/* Curva de Crecimiento Anual de Ventas 2026 (Nuevas vs Renovaciones) */}
-          <GrowthCurveChart
-            sales={baseSales}
-            companyMode={companyMode}
-            allAdvisers={allAdvisers}
-            formatCurrency={formatCurrency}
-          />
-
-          {/* Chart 1: Ventas por Asesor */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-4">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-orange-500" />
-                  Ventas por Asesor Comercial ($ USD y Cantidad)
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Comparativa directa de facturación lograda por cada integrante del equipo.
-                </p>
-              </div>
-              <span className="bg-orange-50 text-orange-700 font-extrabold text-xs px-3 py-1 rounded-full border border-orange-200">
-                Top Asesor: {adviserChartData[0]?.name || "Evelyn Narváez"}
-              </span>
-            </div>
-
-            <div className="h-80 w-full pt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={adviserChartData} margin={{ top: 10, right: 30, left: 20, bottom: 25 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: "bold", fill: "#334155" }} interval={0} />
-                  <YAxis yAxisId="left" tickFormatter={(v) => `$${v}`} tick={{ fontSize: 11, fill: "#64748b" }} />
-                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "#64748b" }} />
-                  <Tooltip content={<CustomBarTooltip formatCurrency={formatCurrency} />} />
-                  <Legend wrapperStyle={{ paddingTop: "10px", fontSize: "12px", fontWeight: "bold" }} />
-                  <Bar yAxisId="left" dataKey="upconta" name="Línea UpConta ($)" fill="#0B2545" radius={[6, 6, 0, 0]} />
-                  <Bar yAxisId="left" dataKey="firmas" name="Línea Firmas ($)" fill="#EAB308" radius={[6, 6, 0, 0]} />
-                  <Bar yAxisId="right" dataKey="cantidad" name="Cantidad Ventas (#)" fill="#F97316" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Reorganized Product Distribution Card (Replaces split comisiones chart) */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <PieChartIcon className="w-5 h-5 text-emerald-500" />
-                  Distribución y Participación por Producto ($ USD)
-                </h3>
-                <p className="text-xs text-slate-500">Monto acumulado y cuota porcentual por cada tipo de servicio comercializado.</p>
-              </div>
-              <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
-                {productChartData.length} productos con ventas
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-              {/* Left Column: Pie Chart (5 cols) */}
-              <div className="lg:col-span-5 h-72 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={productChartData}
-                      dataKey="monto"
-                      nameKey="producto"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={95}
-                      paddingAngle={2}
-                      label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
-                    >
-                      {productChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
-                    <Legend wrapperStyle={{ fontSize: "11px", fontWeight: "600" }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Right Column: Ranked Product Breakdown List (7 cols) */}
-              <div className="lg:col-span-7 space-y-2.5 overflow-y-auto max-h-72 pr-1">
-                {productChartData.map((prod, idx) => {
-                  const totalSum = productChartData.reduce((acc, p) => acc + p.monto, 0);
-                  const pct = totalSum > 0 ? (prod.monto / totalSum) * 100 : 0;
-                  const color = COLORS[idx % COLORS.length];
-
-                  return (
-                    <div key={prod.producto} className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span
-                          className="w-3 h-3 rounded-full shrink-0"
-                          style={{ backgroundColor: color }}
-                        />
-                        <span className="text-xs font-extrabold text-slate-800 truncate">
-                          {prod.producto}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs font-black text-slate-900">
-                          {formatCurrency(prod.monto)}
-                        </span>
-                        <span className="text-[11px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md min-w-[48px] text-right">
-                          {pct.toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* ================= 3 NUEVOS GRÁFICOS: CANTIDAD DE VENTAS Y PRODUCTOS VENDIDOS POR SEMANA ================= */}
-          <div className="space-y-4 pt-4 border-t border-slate-200">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-orange-500" />
-              <h3 className="text-lg font-black text-slate-900">Análisis Semanal de Cantidades (# Ventas y # Productos)</h3>
-            </div>
-            
-            <div className={`grid grid-cols-1 ${companyMode === 'all' || companyMode === 'locked' ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
-              {/* Chart A: Semanal General */}
-              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
-                <div className="border-b border-slate-100 pb-2">
-                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <BarChart3 className="w-4 h-4 text-slate-700" />
-                    1. Cantidad Semanal - {companyMode === "upconta" ? "UpConta" : companyMode === "firmas" ? "Firmas.ec" : "General"}
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    {companyMode === "upconta"
-                      ? "Ventas y productos de sistemas"
-                      : companyMode === "firmas"
-                      ? "Firmas electrónicas emitidas"
-                      : "UpConta & Firmas combinados"}
-                  </p>
-                </div>
-                <div className="h-56 w-full pt-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={companyMode === "upconta" ? weeklyDataUpConta : companyMode === "firmas" ? weeklyDataFirmas : weeklyDataGeneral}
-                      margin={{ top: 10, right: 10, left: -20, bottom: 10 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="semana" tick={{ fontSize: 10, fontWeight: "bold" }} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: "10px", fontWeight: "bold" }} />
-                      <Bar
-                        dataKey="cantidadVentas"
-                        name={companyMode === "firmas" ? "Firmas Emitidas" : "Ventas (#)"}
-                        fill={companyMode === "firmas" ? "#EAB308" : "#0B2545"}
-                        radius={[4, 4, 0, 0]}
-                      />
-                      <Bar
-                        dataKey="cantidadProductos"
-                        name="Productos (#)"
-                        fill={companyMode === "upconta" ? "#3B82F6" : companyMode === "firmas" ? "#003366" : "#F97316"}
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Chart B: Semanal UpConta */}
-              {(companyMode === "upconta" || companyMode === "all" || companyMode === "locked") && (
-                <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
-                  <div className="border-b border-slate-100 pb-2">
-                    <h4 className="text-xs font-black text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
-                      <Building2 className="w-4 h-4 text-orange-500" />
-                      2. Cantidad Semanal - UpConta
-                    </h4>
-                    <p className="text-[11px] text-slate-500">Sistemas &amp; Planes ERP</p>
-                  </div>
-                  <div className="h-56 w-full pt-2">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={weeklyDataUpConta} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                        <XAxis dataKey="semana" tick={{ fontSize: 10, fontWeight: "bold" }} />
-                        <YAxis tick={{ fontSize: 10 }} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: "10px", fontWeight: "bold" }} />
-                        <Bar dataKey="cantidadVentas" name="Ventas UpConta" fill="#0B2545" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="cantidadProductos" name="Productos" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-
-              {/* Chart C: Semanal Firmas */}
-              {(companyMode === "firmas" || companyMode === "all" || companyMode === "locked") && (
-                <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
-                  <div className="border-b border-slate-100 pb-2">
-                    <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-amber-500" />
-                      3. Cantidad Semanal - Firmas.ec
-                    </h4>
-                    <p className="text-[11px] text-slate-500">Certificados SRI e Imprenta</p>
-                  </div>
-                  <div className="h-56 w-full pt-2">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={weeklyDataFirmas} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                        <XAxis dataKey="semana" tick={{ fontSize: 10, fontWeight: "bold" }} />
-                        <YAxis tick={{ fontSize: 10 }} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: "10px", fontWeight: "bold" }} />
-                        <Bar dataKey="cantidadVentas" name="Firmas Emitidas" fill="#EAB308" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="cantidadProductos" name="Productos" fill="#003366" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ================= 4TO GRÁFICO / MÓDULO: COMPARATIVO ENTRE MESES, SEMANAS Y RANGOS ================= */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-6 pt-6 border-t-2 border-t-orange-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-blue-600" />
-                  4. Módulo Comparativo Dinámico (Meses, Semanas y Rangos de Fechas)
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Compara el rendimiento comercial entre dos períodos: por meses calendario con desglose semanal o especificando rangos de fechas exactos.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="bg-blue-50 text-blue-900 font-extrabold text-xs px-3 py-1 rounded-full border border-blue-200">
-                  {compFilterMode === "mes_semana" ? "Comparativa por Mes/Semana" : "Comparativa por Rangos de Fecha"}
-                </span>
-              </div>
-            </div>
-
-            {/* Controls for 4th Comparative Module */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-              {/* Row 1: Mode Switcher & Category selector */}
-              <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 border-b border-slate-200/80 pb-3">
-                <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setCompFilterMode("mes_semana")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      compFilterMode === "mes_semana"
-                        ? "bg-[#0B2545] text-white shadow-xs"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                    }`}
-                  >
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>Por Meses y Semanas</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setCompFilterMode("rango_fechas")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      compFilterMode === "rango_fechas"
-                        ? "bg-orange-500 text-white shadow-xs"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                    }`}
-                  >
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Por Rangos de Fechas</span>
-                  </button>
-                </div>
-
-                {/* Línea de Producto Filter */}
+        {/* ROW 2: TOTAL DE VENTAS, CANTIDAD Y TICKET PROMEDIO DE CADA PRODUCTO (UPCONTA, FIRMAS Y CONVENIOS) */}
+        <div className={`grid grid-cols-1 ${showBothProducts || isAccess1998 ? "lg:grid-cols-2" : "grid-cols-1"} gap-4`}>
+          {/* UPCONTA: FACTURADO, CANTIDAD Y TICKET PROMEDIO */}
+          {(companyMode === "upconta" || companyMode === "all" || companyMode === "locked") && (
+            <div className="bg-gradient-to-br from-[#0B2545] via-[#003566] to-[#0B2545] text-white rounded-2xl p-5 shadow-md border border-orange-500/40 relative overflow-hidden group hover:border-orange-400 transition-all">
+              <div className="flex items-center justify-between pb-3 border-b border-white/10 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <label className="text-[11px] font-bold text-slate-700 whitespace-nowrap">Línea de Producto:</label>
-                  <select
-                    value={compCategory}
-                    onChange={(e) => setCompCategory(e.target.value)}
-                    className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#0B2545]"
-                  >
-                    <option value="all">Ambas Líneas</option>
-                    <option value="upconta">Solo UpConta</option>
-                    <option value="firmas">Solo Firmas.ec</option>
-                  </select>
+                  <div className="p-2.5 bg-orange-500/20 border border-orange-400/30 rounded-xl text-orange-400">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
+                      <span>UpConta (Sistemas &amp; ERP)</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-300 font-medium">Facturación electrónica y software contable</p>
+                  </div>
                 </div>
+                <span className="bg-orange-500/20 text-orange-300 border border-orange-400/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                  UpConta
+                </span>
               </div>
 
-              {/* Row 2: Dynamic Controls based on selected mode */}
-              {compFilterMode === "mes_semana" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-[#0B2545]"></span>
-                      Mes A (Base)
-                    </label>
-                    <select
-                      value={compMonthA}
-                      onChange={(e) => setCompMonthA(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#0B2545]"
-                    >
-                      {allAvailableMonthsOptions.map((mStr) => {
-                        const [mName, year] = mStr.split(" ");
-                        const spanishName = MONTH_TRANSLATIONS[mName] || mName;
-                        return (
-                          <option key={`a-${mStr}`} value={mStr}>
-                            {spanishName} {year}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
-                      Mes B (Comparar)
-                    </label>
-                    <select
-                      value={compMonthB}
-                      onChange={(e) => setCompMonthB(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-orange-500"
-                    >
-                      {allAvailableMonthsOptions.map((mStr) => {
-                        const [mName, year] = mStr.split(" ");
-                        const spanishName = MONTH_TRANSLATIONS[mName] || mName;
-                        return (
-                          <option key={`b-${mStr}`} value={mStr}>
-                            {spanishName} {year}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-700">Filtrar por Semana</label>
-                    <select
-                      value={compWeek}
-                      onChange={(e) => setCompWeek(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                    >
-                      <option value="all">Todas las Semanas</option>
-                      <option value="1">Semana 1 (Vie a Jue)</option>
-                      <option value="2">Semana 2 (Vie a Jue)</option>
-                      <option value="3">Semana 3 (Vie a Jue)</option>
-                      <option value="4">Semana 4 (Vie a Jue)</option>
-                      <option value="5">Semana 5 (Vie a Jue)</option>
-                    </select>
+              <div className="grid grid-cols-3 gap-3 pt-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Total Ventas</span>
+                  <div className="text-lg sm:text-xl font-black text-white">{formatCurrency(totalVentasUpConta)}</div>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Cantidad Ventas</span>
+                  <div className="text-lg sm:text-xl font-black text-orange-400">
+                    {cantidadUpConta} <span className="text-[10px] font-bold text-slate-300">vtas</span>
                   </div>
                 </div>
-              ) : (
-                /* Date Range Mode Controls */
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Período A */}
-                    <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-[#0B2545] flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#0B2545]"></span>
-                          Período A (Base)
-                        </label>
-                        <span className="text-[10px] text-slate-500 font-medium">Desde - Hasta</span>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Ticket Promedio</span>
+                  <div className="text-lg sm:text-xl font-black text-emerald-400">{formatCurrency(ticketPromedioUpConta)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* FIRMAS / CONVENIOS: FACTURADO, CANTIDAD Y TICKET PROMEDIO */}
+          {(companyMode === "firmas" || companyMode === "all" || companyMode === "locked") && (
+            isAccess1998 ? (
+              <>
+                {/* 1. VENTAS FIRMAS (<=$100) */}
+                <div className="bg-gradient-to-br from-[#002244] via-[#003366] to-[#002244] text-white rounded-2xl p-5 shadow-md border border-blue-500/40 relative overflow-hidden group hover:border-blue-400 transition-all">
+                  <div className="flex items-center justify-between pb-3 border-b border-white/10 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2.5 bg-blue-500/20 border border-blue-400/30 rounded-xl text-blue-400">
+                        <ShieldCheck className="w-5 h-5" />
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] text-slate-500 block mb-0.5">Fecha Inicio:</label>
-                          <input
-                            type="date"
-                            value={compStartDateA}
-                            onChange={(e) => setCompStartDateA(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#0B2545]"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-500 block mb-0.5">Fecha Fin:</label>
-                          <input
-                            type="date"
-                            value={compEndDateA}
-                            onChange={(e) => setCompEndDateA(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#0B2545]"
-                          />
-                        </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                          <span>Ventas Firmas</span>
+                        </h4>
+                        <p className="text-[11px] text-slate-300 font-medium">Ventas registradas de firmas hasta $100</p>
                       </div>
                     </div>
+                    <span className="bg-blue-500/20 text-blue-300 border border-blue-400/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                      Ventas Firmas
+                    </span>
+                  </div>
 
-                    {/* Período B */}
-                    <div className="bg-white p-3 rounded-xl border border-orange-200 bg-orange-50/20 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-orange-600 flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
-                          Período B (Comparar)
-                        </label>
-                        <span className="text-[10px] text-slate-500 font-medium">Desde - Hasta</span>
+                  <div className="grid grid-cols-3 gap-3 pt-4">
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Total Ventas</span>
+                      <div className="text-lg sm:text-xl font-black text-white">{formatCurrency(totalVentasFirmasNormal)}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Cantidad Ventas</span>
+                      <div className="text-lg sm:text-xl font-black text-blue-400">
+                        {cantidadFirmasNormal} <span className="text-[10px] font-bold text-slate-300">firmas</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] text-slate-500 block mb-0.5">Fecha Inicio:</label>
-                          <input
-                            type="date"
-                            value={compStartDateB}
-                            onChange={(e) => setCompStartDateB(e.target.value)}
-                            className="w-full bg-slate-50 border border-orange-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-500 block mb-0.5">Fecha Fin:</label>
-                          <input
-                            type="date"
-                            value={compEndDateB}
-                            onChange={(e) => setCompEndDateB(e.target.value)}
-                            className="w-full bg-slate-50 border border-orange-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-500"
-                          />
-                        </div>
-                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Ticket Promedio</span>
+                      <div className="text-lg sm:text-xl font-black text-emerald-400">{formatCurrency(ticketPromedioFirmasNormal)}</div>
                     </div>
                   </div>
                 </div>
-              )}
+
+                {/* 2. VENTA CONVENIOS (>$100) */}
+                <div className="bg-gradient-to-br from-[#1E1145] via-[#2E1065] to-[#1E1145] text-white rounded-2xl p-5 shadow-md border border-purple-500/40 relative overflow-hidden group hover:border-purple-400 transition-all">
+                  <div className="flex items-center justify-between pb-3 border-b border-white/10 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2.5 bg-purple-500/20 border border-purple-400/30 rounded-xl text-purple-400">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
+                          <span>Venta Convenios</span>
+                        </h4>
+                        <p className="text-[11px] text-slate-300 font-medium">Ventas registradas superiores a $100</p>
+                      </div>
+                    </div>
+                    <span className="bg-purple-500/20 text-purple-300 border border-purple-400/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                      Venta Convenios
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 pt-4">
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Total Ventas</span>
+                      <div className="text-lg sm:text-xl font-black text-white">{formatCurrency(totalVentasConvenios)}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Cantidad Ventas</span>
+                      <div className="text-lg sm:text-xl font-black text-purple-400">
+                        {cantidadConvenios} <span className="text-[10px] font-bold text-slate-300">convenios</span>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Ticket Promedio</span>
+                      <div className="text-lg sm:text-xl font-black text-emerald-400">{formatCurrency(ticketPromedioConvenios)}</div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="bg-gradient-to-br from-[#002244] via-[#003366] to-[#002244] text-white rounded-2xl p-5 shadow-md border border-blue-500/40 relative overflow-hidden group hover:border-blue-400 transition-all">
+                <div className="flex items-center justify-between pb-3 border-b border-white/10 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2.5 bg-blue-500/20 border border-blue-400/30 rounded-xl text-blue-400">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                        <span>Firmas Electrónicas (ANF AC)</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-300 font-medium">Certificados digitales y token criptográfico</p>
+                    </div>
+                  </div>
+                  <span className="bg-blue-500/20 text-blue-300 border border-blue-400/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                    Firmas ANF
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 pt-4">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Total Ventas</span>
+                    <div className="text-lg sm:text-xl font-black text-white">{formatCurrency(totalVentasFirmas)}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Cantidad Ventas</span>
+                    <div className="text-lg sm:text-xl font-black text-blue-400">
+                      {cantidadFirmas} <span className="text-[10px] font-bold text-slate-300">firmas</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Ticket Promedio</span>
+                    <div className="text-lg sm:text-xl font-black text-emerald-400">{formatCurrency(ticketPromedioFirmas)}</div>
+                  </div>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+
+        {/* ================= 1. KPIS POR CANAL (NUEVAS, RENOVACIONES, SOCIOS, DISTRIBUIDORES) ================= */}
+        <div className="pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* KPI 1: Ventas Nuevas */}
+            <div className="bg-white text-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm border border-emerald-200/90 relative overflow-hidden group hover:border-emerald-400 transition-all">
+              <div className="flex items-center justify-between pb-2 border-b border-emerald-50">
+                <span className="text-[11px] font-black text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  Ventas Nuevas
+                </span>
+                <span className="text-[11px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  {cantidadVentas > 0 ? ((channelTotals.nueva.count / cantidadVentas) * 100).toFixed(1) : 0}%
+                </span>
+              </div>
+              <div className="pt-3 space-y-1">
+                <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                  {channelTotals.nueva.count} <span className="text-xs font-bold text-slate-500">ventas</span>
+                </div>
+                <div className="text-xs font-bold text-slate-600 flex items-center justify-between pt-1">
+                  <span>Facturado Sin IVA:</span>
+                  <span className="text-emerald-700 font-black">{formatCurrency(channelTotals.nueva.sinIva)}</span>
+                </div>
+                {isAccess1998 && (
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-blue-600">Firmas: {channelTotals.nueva.firmasNormalCount}</span>
+                    <span className="text-purple-600">Convenios: {channelTotals.nueva.conveniosCount}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Visual Bar Chart Comparison */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
-              <div className="lg:col-span-2 h-64 w-full pt-2">
+            {/* KPI 2: Renovaciones */}
+            <div className="bg-white text-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm border border-blue-200/90 relative overflow-hidden group hover:border-blue-400 transition-all">
+              <div className="flex items-center justify-between pb-2 border-b border-blue-50">
+                <span className="text-[11px] font-black text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+                  Renovaciones
+                </span>
+                <span className="text-[11px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                  {cantidadVentas > 0 ? ((channelTotals.renovacion.count / cantidadVentas) * 100).toFixed(1) : 0}%
+                </span>
+              </div>
+              <div className="pt-3 space-y-1">
+                <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                  {channelTotals.renovacion.count} <span className="text-xs font-bold text-slate-500">ventas</span>
+                </div>
+                <div className="text-xs font-bold text-slate-600 flex items-center justify-between pt-1">
+                  <span>Facturado Sin IVA:</span>
+                  <span className="text-blue-700 font-black">{formatCurrency(channelTotals.renovacion.sinIva)}</span>
+                </div>
+                {isAccess1998 && (
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-blue-600">Firmas: {channelTotals.renovacion.firmasNormalCount}</span>
+                    <span className="text-purple-600">Convenios: {channelTotals.renovacion.conveniosCount}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* KPI 3: Socios */}
+            <div className="bg-white text-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm border border-amber-200/90 relative overflow-hidden group hover:border-amber-400 transition-all">
+              <div className="flex items-center justify-between pb-2 border-b border-amber-50">
+                <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-amber-600" />
+                  Ventas de Socios
+                </span>
+                <span className="text-[11px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                  {cantidadVentas > 0 ? ((channelTotals.socio.count / cantidadVentas) * 100).toFixed(1) : 0}%
+                </span>
+              </div>
+              <div className="pt-3 space-y-1">
+                <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                  {channelTotals.socio.count} <span className="text-xs font-bold text-slate-500">ventas</span>
+                </div>
+                <div className="text-xs font-bold text-slate-600 flex items-center justify-between pt-1">
+                  <span>Facturado Sin IVA:</span>
+                  <span className="text-amber-800 font-black">{formatCurrency(channelTotals.socio.sinIva)}</span>
+                </div>
+                {isAccess1998 && (
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-blue-600">Firmas: {channelTotals.socio.firmasNormalCount}</span>
+                    <span className="text-purple-600">Convenios: {channelTotals.socio.conveniosCount}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* KPI 4: Distribuidores */}
+            <div className="bg-white text-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm border border-purple-200/90 relative overflow-hidden group hover:border-purple-400 transition-all">
+              <div className="flex items-center justify-between pb-2 border-b border-purple-50">
+                <span className="text-[11px] font-black text-purple-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-purple-600" />
+                  Distribuidores
+                </span>
+                <span className="text-[11px] font-black text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                  {cantidadVentas > 0 ? ((channelTotals.distribuidor.count / cantidadVentas) * 100).toFixed(1) : 0}%
+                </span>
+              </div>
+              <div className="pt-3 space-y-1">
+                <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                  {channelTotals.distribuidor.count} <span className="text-xs font-bold text-slate-500">ventas</span>
+                </div>
+                <div className="text-xs font-bold text-slate-600 flex items-center justify-between pt-1">
+                  <span>Facturado Sin IVA:</span>
+                  <span className="text-purple-700 font-black">{formatCurrency(channelTotals.distribuidor.sinIva)}</span>
+                </div>
+                {isAccess1998 && (
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-blue-600">Firmas: {channelTotals.distribuidor.firmasNormalCount}</span>
+                    <span className="text-purple-600">Convenios: {channelTotals.distribuidor.conveniosCount}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ================= 2. GRÁFICO DE BARRAS: CANTIDAD DE VENTAS POR CANAL ================= */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 font-black text-slate-800 text-sm uppercase tracking-wider">
+                <BarChart3 className="w-4 h-4 text-orange-500" />
+                <span>Cantidad de Ventas por Canal (Nuevas, Renovaciones, Socios, Distribuidores)</span>
+              </div>
+              <p className="text-xs text-slate-500">
+                {isAccess1998
+                  ? "Comparativo de operaciones con dos barras por canal: Azul Ventas Firmas y Morado Venta Convenios"
+                  : showBothProducts 
+                  ? "Comparativo de operaciones con dos barras por canal: Naranja UpConta y Azul Firmas ANF" 
+                  : "Comparativo de volumen de operaciones registrado para el período y filtros activos"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {isAccess1998 ? (
+                <div className="flex items-center gap-3 text-xs font-bold bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
+                  <span className="flex items-center gap-1.5 text-blue-600">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                    Ventas Firmas
+                  </span>
+                  <span className="flex items-center gap-1.5 text-purple-600">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                    Venta Convenios
+                  </span>
+                </div>
+              ) : showBothProducts && (
+                <div className="flex items-center gap-3 text-xs font-bold bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
+                  <span className="flex items-center gap-1.5 text-orange-600">
+                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                    UpConta
+                  </span>
+                  <span className="flex items-center gap-1.5 text-blue-600">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                    Firmas
+                  </span>
+                </div>
+              )}
+              <div className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                Total: {cantidadVentas} operaciones
+              </div>
+            </div>
+          </div>
+
+          <div className="h-64 sm:h-72 w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={channelComparisonBarData} margin={{ top: 20, right: 20, left: 0, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="canal" tick={{ fill: "#475569", fontSize: 12, fontWeight: 700 }} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: "#64748B", fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip
+                  cursor={{ fill: "rgba(15, 23, 42, 0.04)" }}
+                  content={({ active, payload }: any) => {
+                    if (active && payload && payload.length) {
+                      const d = payload[0].payload;
+                      return (
+                        <div className="bg-[#0B2545] text-white p-3 rounded-xl border border-slate-700 shadow-2xl text-xs space-y-1.5">
+                          <p className="font-extrabold text-white border-b border-slate-700 pb-1 flex items-center justify-between gap-4">
+                            <span>Canal: {d.canal}</span>
+                            <span className="text-[10px] text-orange-400 font-bold">{d.pct.toFixed(1)}% del total</span>
+                          </p>
+                          <div className="space-y-1 pt-1 text-[11px]">
+                            {isAccess1998 ? (
+                              <>
+                                <div className="flex items-center justify-between gap-4 text-blue-400 font-bold">
+                                  <span>🔵 Ventas Firmas:</span>
+                                  <span>{d.firmasNormalCantidad} firmas ({formatCurrency(d.firmasNormalMonto)})</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4 text-purple-400 font-bold">
+                                  <span>🟣 Venta Convenios:</span>
+                                  <span>{d.conveniosCantidad} convenios ({formatCurrency(d.conveniosMonto)})</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4 text-white font-extrabold border-t border-slate-700 pt-1">
+                                  <span>Total Canal:</span>
+                                  <span>{d.totalCantidad} ventas ({formatCurrency(d.totalMonto)})</span>
+                                </div>
+                              </>
+                            ) : showBothProducts ? (
+                              <>
+                                <div className="flex items-center justify-between gap-4 text-orange-400 font-bold">
+                                  <span>🟠 UpConta:</span>
+                                  <span>{d.upcontaCantidad} ventas ({formatCurrency(d.upcontaMonto)})</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4 text-blue-400 font-bold">
+                                  <span>🔵 Firmas:</span>
+                                  <span>{d.firmasCantidad} firmas ({formatCurrency(d.firmasMonto)})</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4 text-white font-extrabold border-t border-slate-700 pt-1">
+                                  <span>Total Canal:</span>
+                                  <span>{d.totalCantidad} ventas ({formatCurrency(d.totalMonto)})</span>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex items-center justify-between gap-4">
+                                  <span className="text-slate-300">Cantidad:</span>
+                                  <span className="font-black text-white">{d.totalCantidad} ventas</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                  <span className="text-slate-300">Sin IVA:</span>
+                                  <span className="font-bold text-emerald-400">{formatCurrency(d.totalMonto)}</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                {isAccess1998 ? (
+                  <>
+                    <Legend iconType="circle" wrapperStyle={{ paddingTop: "8px", fontSize: "12px", fontWeight: "700" }} />
+                    <Bar dataKey="firmasNormalCantidad" name="Ventas Firmas" fill="#2563EB" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="conveniosCantidad" name="Venta Convenios" fill="#8B5CF6" radius={[6, 6, 0, 0]} />
+                  </>
+                ) : showBothProducts ? (
+                  <>
+                    <Legend iconType="circle" wrapperStyle={{ paddingTop: "8px", fontSize: "12px", fontWeight: "700" }} />
+                    <Bar dataKey="upcontaCantidad" name="UpConta" fill="#F97316" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="firmasCantidad" name="Firmas" fill="#2563EB" radius={[6, 6, 0, 0]} />
+                  </>
+                ) : companyMode === "upconta" || selectedCategory === "upconta" ? (
+                  <Bar dataKey="upcontaCantidad" name="UpConta" fill="#F97316" radius={[6, 6, 0, 0]} />
+                ) : (
+                  <Bar dataKey="firmasCantidad" name="Firmas" fill="#2563EB" radius={[6, 6, 0, 0]} />
+                )}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* ================= 3. 4 GRÁFICOS COMPARATIVOS MES A MES (CON DOS BARRAS: UPCONTA Y FIRMAS) ================= */}
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="space-y-0.5">
+              <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                <span>4 Gráficos Comparativos Mes a Mes</span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                {isAccess1998
+                  ? "Comparativo mensual por canal con dos barras: Azul Ventas Firmas y Morado Venta Convenios"
+                  : "Comparativo mensual por canal con dos barras: Naranja UpConta y Azul Firmas ANF"}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 text-xs font-bold bg-white px-3 py-1 rounded-full border border-slate-200">
+                {isAccess1998 ? (
+                  <>
+                    <span className="flex items-center gap-1 text-blue-600">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                      Ventas Firmas
+                    </span>
+                    <span className="flex items-center gap-1 text-purple-600">
+                      <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                      Venta Convenios
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex items-center gap-1 text-orange-600">
+                      <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                      UpConta
+                    </span>
+                    <span className="flex items-center gap-1 text-blue-600">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                      Firmas
+                    </span>
+                  </>
+                )}
+              </div>
+              {activeMonthNum && (
+                <span className="bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold px-3 py-1 rounded-full">
+                  Mes en foco: {MONTHS_LIST[activeMonthNum - 1]?.name}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Gráfico 1: Ventas Nuevas */}
+            <div className="bg-white border border-emerald-200/90 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-emerald-50 pb-2">
+                <div className="flex items-center gap-1.5 font-black text-emerald-800 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                  <span>1. Ventas Nuevas</span>
+                </div>
+                <span className="text-xs font-black text-emerald-700">
+                  {monthlyChannelData.reduce((acc, curr) => acc + curr.nuevasTotal, 0)} vtas
+                </span>
+              </div>
+              <div className="h-40 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={comparativeMetrics.chartData} margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="metric" tick={{ fontSize: 11, fontWeight: "bold" }} />
-                    <YAxis tickFormatter={(v) => `$${v}`} tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: any, name: any) => [formatCurrency(Number(v)), name]} />
-                    <Legend wrapperStyle={{ fontSize: "12px", fontWeight: "bold" }} />
-                    <Bar dataKey="periodoA" name={comparativeMetrics.labelA} fill="#0B2545" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="periodoB" name={comparativeMetrics.labelB} fill="#F97316" radius={[6, 6, 0, 0]} />
+                  <BarChart data={monthlyChannelData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis dataKey="mes" tick={{ fontSize: 9, fill: "#64748B", fontWeight: 700 }} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 9, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (active && payload && payload.length) {
+                          const d = payload[0].payload;
+                          return (
+                            <div className="bg-[#0B2545] text-white p-2.5 rounded-lg border border-slate-700 text-xs shadow-xl space-y-1">
+                              <p className="font-extrabold text-emerald-400 border-b border-slate-700 pb-0.5">{d.fullName} - Nuevas</p>
+                              {isAccess1998 ? (
+                                <>
+                                  <p className="text-blue-400 font-bold">🔵 Ventas Firmas: {d.nuevasFirmasNormal} ventas</p>
+                                  <p className="text-purple-400 font-bold">🟣 Venta Convenios: {d.nuevasConvenios} convenios</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-orange-400 font-bold">🟠 UpConta: {d.nuevasUpconta} ventas</p>
+                                  <p className="text-blue-400 font-bold">🔵 Firmas: {d.nuevasFirmas} firmas</p>
+                                </>
+                              )}
+                              <p className="text-white font-extrabold border-t border-slate-700 pt-0.5">Total: {d.nuevasTotal} ventas</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    {isAccess1998 ? (
+                      <>
+                        <Bar dataKey="nuevasFirmasNormal" name="Ventas Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="nuevasConvenios" name="Venta Convenios" fill="#8B5CF6" radius={[3, 3, 0, 0]} />
+                      </>
+                    ) : showBothProducts ? (
+                      <>
+                        <Bar dataKey="nuevasUpconta" name="UpConta" fill="#F97316" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="nuevasFirmas" name="Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                      </>
+                    ) : companyMode === "upconta" || selectedCategory === "upconta" ? (
+                      <Bar dataKey="nuevasUpconta" name="UpConta" fill="#F97316" radius={[3, 3, 0, 0]} />
+                    ) : (
+                      <Bar dataKey="nuevasFirmas" name="Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                    )}
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+            </div>
 
-              {/* Table Summary for Comparative */}
-              <div className="overflow-x-auto border border-slate-200 rounded-2xl bg-white shadow-sm">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-slate-900 text-white font-black uppercase text-[10px]">
-                    <tr>
-                      <th className="p-2.5">Métrica</th>
-                      <th className="p-2.5 text-right">{comparativeMetrics.labelA}</th>
-                      <th className="p-2.5 text-right bg-orange-600">{comparativeMetrics.labelB}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-bold text-slate-800">
-                    <tr>
-                      <td className="p-2.5">Total Ventas ($)</td>
-                      <td className="p-2.5 text-right">{formatCurrency(comparativeMetrics.statsA.totalMonto)}</td>
-                      <td className="p-2.5 text-right text-orange-600">{formatCurrency(comparativeMetrics.statsB.totalMonto)}</td>
-                    </tr>
-                    <tr className="bg-slate-50">
-                      <td className="p-2.5">UpConta ($)</td>
-                      <td className="p-2.5 text-right">{formatCurrency(comparativeMetrics.statsA.totalUpMonto)}</td>
-                      <td className="p-2.5 text-right text-orange-600">{formatCurrency(comparativeMetrics.statsB.totalUpMonto)}</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2.5">Firmas.ec ($)</td>
-                      <td className="p-2.5 text-right">{formatCurrency(comparativeMetrics.statsA.totalFirMonto)}</td>
-                      <td className="p-2.5 text-right text-orange-600">{formatCurrency(comparativeMetrics.statsB.totalFirMonto)}</td>
-                    </tr>
-                    <tr className="bg-slate-50">
-                      <td className="p-2.5">Cantidad (#)</td>
-                      <td className="p-2.5 text-right">{comparativeMetrics.statsA.qtyTotal} ventas</td>
-                      <td className="p-2.5 text-right text-orange-600">{comparativeMetrics.statsB.qtyTotal} ventas</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2.5">Ticket Prom. ($)</td>
-                      <td className="p-2.5 text-right">{formatCurrency(comparativeMetrics.statsA.ticket)}</td>
-                      <td className="p-2.5 text-right text-orange-600">{formatCurrency(comparativeMetrics.statsB.ticket)}</td>
-                    </tr>
-                  </tbody>
-                </table>
+            {/* Gráfico 2: Renovaciones */}
+            <div className="bg-white border border-blue-200/90 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-blue-50 pb-2">
+                <div className="flex items-center gap-1.5 font-black text-blue-800 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                  <span>2. Renovaciones</span>
+                </div>
+                <span className="text-xs font-black text-blue-700">
+                  {monthlyChannelData.reduce((acc, curr) => acc + curr.renovTotal, 0)} vtas
+                </span>
+              </div>
+              <div className="h-40 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyChannelData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis dataKey="mes" tick={{ fontSize: 9, fill: "#64748B", fontWeight: 700 }} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 9, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (active && payload && payload.length) {
+                          const d = payload[0].payload;
+                          return (
+                            <div className="bg-[#0B2545] text-white p-2.5 rounded-lg border border-slate-700 text-xs shadow-xl space-y-1">
+                              <p className="font-extrabold text-blue-400 border-b border-slate-700 pb-0.5">{d.fullName} - Renovaciones</p>
+                              {isAccess1998 ? (
+                                <>
+                                  <p className="text-blue-400 font-bold">🔵 Ventas Firmas: {d.renovFirmasNormal} ventas</p>
+                                  <p className="text-purple-400 font-bold">🟣 Venta Convenios: {d.renovConvenios} convenios</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-orange-400 font-bold">🟠 UpConta: {d.renovUpconta} ventas</p>
+                                  <p className="text-blue-400 font-bold">🔵 Firmas: {d.renovFirmas} firmas</p>
+                                </>
+                              )}
+                              <p className="text-white font-extrabold border-t border-slate-700 pt-0.5">Total: {d.renovTotal} ventas</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    {isAccess1998 ? (
+                      <>
+                        <Bar dataKey="renovFirmasNormal" name="Ventas Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="renovConvenios" name="Venta Convenios" fill="#8B5CF6" radius={[3, 3, 0, 0]} />
+                      </>
+                    ) : showBothProducts ? (
+                      <>
+                        <Bar dataKey="renovUpconta" name="UpConta" fill="#F97316" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="renovFirmas" name="Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                      </>
+                    ) : companyMode === "upconta" || selectedCategory === "upconta" ? (
+                      <Bar dataKey="renovUpconta" name="UpConta" fill="#F97316" radius={[3, 3, 0, 0]} />
+                    ) : (
+                      <Bar dataKey="renovFirmas" name="Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                    )}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Gráfico 3: Socios */}
+            <div className="bg-white border border-amber-200/90 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-amber-50 pb-2">
+                <div className="flex items-center gap-1.5 font-black text-amber-800 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                  <span>3. Ventas Socios</span>
+                </div>
+                <span className="text-xs font-black text-amber-800">
+                  {monthlyChannelData.reduce((acc, curr) => acc + curr.sociosTotal, 0)} vtas
+                </span>
+              </div>
+              <div className="h-40 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyChannelData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis dataKey="mes" tick={{ fontSize: 9, fill: "#64748B", fontWeight: 700 }} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 9, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (active && payload && payload.length) {
+                          const d = payload[0].payload;
+                          return (
+                            <div className="bg-[#0B2545] text-white p-2.5 rounded-lg border border-slate-700 text-xs shadow-xl space-y-1">
+                              <p className="font-extrabold text-amber-400 border-b border-slate-700 pb-0.5">{d.fullName} - Socios</p>
+                              {isAccess1998 ? (
+                                <>
+                                  <p className="text-blue-400 font-bold">🔵 Ventas Firmas: {d.sociosFirmasNormal} ventas</p>
+                                  <p className="text-purple-400 font-bold">🟣 Venta Convenios: {d.sociosConvenios} convenios</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-orange-400 font-bold">🟠 UpConta: {d.sociosUpconta} ventas</p>
+                                  <p className="text-blue-400 font-bold">🔵 Firmas: {d.sociosFirmas} firmas</p>
+                                </>
+                              )}
+                              <p className="text-white font-extrabold border-t border-slate-700 pt-0.5">Total: {d.sociosTotal} ventas</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    {isAccess1998 ? (
+                      <>
+                        <Bar dataKey="sociosFirmasNormal" name="Ventas Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="sociosConvenios" name="Venta Convenios" fill="#8B5CF6" radius={[3, 3, 0, 0]} />
+                      </>
+                    ) : showBothProducts ? (
+                      <>
+                        <Bar dataKey="sociosUpconta" name="UpConta" fill="#F97316" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="sociosFirmas" name="Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                      </>
+                    ) : companyMode === "upconta" || selectedCategory === "upconta" ? (
+                      <Bar dataKey="sociosUpconta" name="UpConta" fill="#F97316" radius={[3, 3, 0, 0]} />
+                    ) : (
+                      <Bar dataKey="sociosFirmas" name="Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                    )}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Gráfico 4: Distribuidores */}
+            <div className="bg-white border border-purple-200/90 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-purple-50 pb-2">
+                <div className="flex items-center gap-1.5 font-black text-purple-800 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                  <span>4. Distribuidores</span>
+                </div>
+                <span className="text-xs font-black text-purple-700">
+                  {monthlyChannelData.reduce((acc, curr) => acc + curr.distTotal, 0)} vtas
+                </span>
+              </div>
+              <div className="h-40 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyChannelData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis dataKey="mes" tick={{ fontSize: 9, fill: "#64748B", fontWeight: 700 }} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 9, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (active && payload && payload.length) {
+                          const d = payload[0].payload;
+                          return (
+                            <div className="bg-[#0B2545] text-white p-2.5 rounded-lg border border-slate-700 text-xs shadow-xl space-y-1">
+                              <p className="font-extrabold text-purple-400 border-b border-slate-700 pb-0.5">{d.fullName} - Distribuidores</p>
+                              {isAccess1998 ? (
+                                <>
+                                  <p className="text-blue-400 font-bold">🔵 Ventas Firmas: {d.distFirmasNormal} ventas</p>
+                                  <p className="text-purple-400 font-bold">🟣 Venta Convenios: {d.distConvenios} convenios</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-orange-400 font-bold">🟠 UpConta: {d.distUpconta} ventas</p>
+                                  <p className="text-blue-400 font-bold">🔵 Firmas: {d.distFirmas} firmas</p>
+                                </>
+                              )}
+                              <p className="text-white font-extrabold border-t border-slate-700 pt-0.5">Total: {d.distTotal} ventas</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    {isAccess1998 ? (
+                      <>
+                        <Bar dataKey="distFirmasNormal" name="Ventas Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="distConvenios" name="Venta Convenios" fill="#8B5CF6" radius={[3, 3, 0, 0]} />
+                      </>
+                    ) : showBothProducts ? (
+                      <>
+                        <Bar dataKey="distUpconta" name="UpConta" fill="#F97316" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="distFirmas" name="Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                      </>
+                    ) : companyMode === "upconta" || selectedCategory === "upconta" ? (
+                      <Bar dataKey="distUpconta" name="UpConta" fill="#F97316" radius={[3, 3, 0, 0]} />
+                    ) : (
+                      <Bar dataKey="distFirmas" name="Firmas" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                    )}
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>
         </div>
-      )}
 
-      {/* ================= VIEW: CURVA DE CRECIMIENTO DEDICADA (ENERO - DICIEMBRE 2026) ================= */}
-      {activeViewTab === "crecimiento" && (
-        <div className="space-y-6">
-          <GrowthCurveChart
-            sales={baseSales}
-            companyMode={companyMode}
-            allAdvisers={allAdvisers}
-            formatCurrency={formatCurrency}
-          />
-        </div>
-      )}
-
-      {/* ================= VIEW 2: REPORTE POR PRODUCTO TABLE ================= */}
-      {activeViewTab === "producto" && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-4">
-            <div>
-              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-orange-500" />
-                Reporte por Producto ($ USD) - Dinámico
+        {/* ================= 4. GRÁFICOS LINEALES DE EVOLUCIÓN (SEMANAL / MENSUAL CON 2 LÍNEAS) - ARRIBA DEL LISTADO ================= */}
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="space-y-0.5">
+              <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-600" />
+                <span>
+                  {isAllYear ? "Evolución Mensual de Ventas" : "Evolución Semanal de Ventas"} (Cantidad y Monto)
+                </span>
               </h3>
               <p className="text-xs text-slate-500">
-                Resumen reactivo que se ajusta automáticamente según la línea de producto, semana y período filtrado.
+                {isAllYear
+                  ? "Evolución mes a mes a lo largo del año consolidado"
+                  : "Evolución semana a semana (Viernes a Jueves) del mes seleccionado"}
+                {isAccess1998 
+                  ? " — Dos líneas: Azul Ventas Firmas y Morado Venta Convenios"
+                  : showBothProducts && " — Dos líneas: Naranja UpConta y Azul Firmas ANF"}
               </p>
             </div>
-            <span className="bg-blue-50 text-blue-800 text-xs font-bold px-3 py-1 rounded-full border border-blue-200">
-              Total Filtrado: {formatCurrency(totalVentasMonto)}
-            </span>
+            {isAccess1998 ? (
+              <div className="flex items-center gap-3 text-xs font-bold bg-white px-3 py-1 rounded-full border border-slate-200">
+                <span className="flex items-center gap-1.5 text-blue-600">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                  Ventas Firmas
+                </span>
+                <span className="flex items-center gap-1.5 text-purple-600">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                  Venta Convenios
+                </span>
+              </div>
+            ) : showBothProducts && (
+              <div className="flex items-center gap-3 text-xs font-bold bg-white px-3 py-1 rounded-full border border-slate-200">
+                <span className="flex items-center gap-1.5 text-orange-600">
+                  <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                  UpConta
+                </span>
+                <span className="flex items-center gap-1.5 text-blue-600">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                  Firmas
+                </span>
+              </div>
+            )}
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-[#0B2545] text-white uppercase text-[10px] font-black tracking-wider">
-                <tr>
-                  <th className="p-3">Línea</th>
-                  <th className="p-3">Producto / Plan</th>
-                  {activeReportAdvisers.map(adv => (
-                    <th key={adv.key} className="p-3 text-right">{adv.name}</th>
-                  ))}
-                  <th className="p-3 text-right bg-orange-600">TOTAL</th>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Gráfico Lineal 1: Cantidad de Ventas */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <ShoppingBag className="w-3.5 h-3.5 text-blue-600" />
+                  {isAllYear ? "Evolución Mensual: Cantidad de Ventas" : "Evolución Semanal: Cantidad de Ventas"}
+                </span>
+                <span className="text-xs font-black text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                  {evolutionChartData.reduce((acc, curr) => acc + curr.totalCantidad, 0)} operaciones
+                </span>
+              </div>
+              <div className="h-60 w-full pt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={evolutionChartData} margin={{ top: 10, right: 15, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis dataKey="periodo" tick={{ fontSize: 10, fill: "#475569", fontWeight: 700 }} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (active && payload && payload.length) {
+                          const d = payload[0].payload;
+                          return (
+                            <div className="bg-[#0B2545] text-white p-2.5 rounded-xl border border-slate-700 text-xs shadow-2xl space-y-1">
+                              <p className="font-extrabold text-white border-b border-slate-700 pb-1">{d.label || d.periodo}</p>
+                              {isAccess1998 ? (
+                                <>
+                                  <p className="font-bold text-blue-400">🔵 Ventas Firmas: {d.firmasNormalCantidad} ventas</p>
+                                  <p className="font-bold text-purple-400">🟣 Venta Convenios: {d.conveniosCantidad} convenios</p>
+                                  <p className="font-black text-emerald-400 border-t border-slate-700 pt-0.5">Total: {d.totalCantidad} operaciones</p>
+                                </>
+                              ) : showBothProducts ? (
+                                <>
+                                  <p className="font-bold text-orange-400">🟠 UpConta: {d.upcontaCantidad} ventas</p>
+                                  <p className="font-bold text-blue-400">🔵 Firmas: {d.firmasCantidad} firmas</p>
+                                  <p className="font-black text-emerald-400 border-t border-slate-700 pt-0.5">Total: {d.totalCantidad} operaciones</p>
+                                </>
+                              ) : (
+                                <p className="font-black text-blue-400 pt-1">{d.totalCantidad} ventas realizadas</p>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    {isAccess1998 ? (
+                      <>
+                        <Legend iconType="circle" wrapperStyle={{ paddingTop: "6px", fontSize: "11px", fontWeight: "700" }} />
+                        <Line
+                          type="monotone"
+                          dataKey="firmasNormalCantidad"
+                          name="Ventas Firmas"
+                          stroke="#2563EB"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: "#2563EB", strokeWidth: 2, stroke: "#FFFFFF" }}
+                          activeDot={{ r: 6, fill: "#1D4ED8" }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="conveniosCantidad"
+                          name="Venta Convenios"
+                          stroke="#8B5CF6"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: "#8B5CF6", strokeWidth: 2, stroke: "#FFFFFF" }}
+                          activeDot={{ r: 6, fill: "#7C3AED" }}
+                        />
+                      </>
+                    ) : showBothProducts ? (
+                      <>
+                        <Legend iconType="circle" wrapperStyle={{ paddingTop: "6px", fontSize: "11px", fontWeight: "700" }} />
+                        <Line
+                          type="monotone"
+                          dataKey="upcontaCantidad"
+                          name="UpConta"
+                          stroke="#F97316"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: "#F97316", strokeWidth: 2, stroke: "#FFFFFF" }}
+                          activeDot={{ r: 6, fill: "#EA580C" }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="firmasCantidad"
+                          name="Firmas"
+                          stroke="#2563EB"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: "#2563EB", strokeWidth: 2, stroke: "#FFFFFF" }}
+                          activeDot={{ r: 6, fill: "#1D4ED8" }}
+                        />
+                      </>
+                    ) : companyMode === "upconta" || selectedCategory === "upconta" ? (
+                      <Line
+                        type="monotone"
+                        dataKey="upcontaCantidad"
+                        name="UpConta"
+                        stroke="#F97316"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: "#F97316", strokeWidth: 2, stroke: "#FFFFFF" }}
+                        activeDot={{ r: 6, fill: "#EA580C" }}
+                      />
+                    ) : (
+                      <Line
+                        type="monotone"
+                        dataKey="firmasCantidad"
+                        name="Firmas"
+                        stroke="#2563EB"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: "#2563EB", strokeWidth: 2, stroke: "#FFFFFF" }}
+                        activeDot={{ r: 6, fill: "#1D4ED8" }}
+                      />
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Gráfico Lineal 2: Monto Facturado */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                  {isAllYear ? "Evolución Mensual: Monto Facturado ($ Sin IVA)" : "Evolución Semanal: Monto Facturado ($ Sin IVA)"}
+                </span>
+                <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  {formatCurrency(evolutionChartData.reduce((acc, curr) => acc + curr.totalMonto, 0))}
+                </span>
+              </div>
+              <div className="h-60 w-full pt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={evolutionChartData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis dataKey="periodo" tick={{ fontSize: 10, fill: "#475569", fontWeight: 700 }} tickLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: "#94A3B8" }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
+                    />
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (active && payload && payload.length) {
+                          const d = payload[0].payload;
+                          return (
+                            <div className="bg-[#0B2545] text-white p-2.5 rounded-xl border border-slate-700 text-xs shadow-2xl space-y-1">
+                              <p className="font-extrabold text-white border-b border-slate-700 pb-1">{d.label || d.periodo}</p>
+                              {isAccess1998 ? (
+                                <>
+                                  <p className="font-bold text-blue-400">🔵 Ventas Firmas: {formatCurrency(d.firmasNormalMonto)}</p>
+                                  <p className="font-bold text-purple-400">🟣 Venta Convenios: {formatCurrency(d.conveniosMonto)}</p>
+                                  <p className="font-black text-emerald-400 border-t border-slate-700 pt-0.5">Total: {formatCurrency(d.totalMonto)}</p>
+                                </>
+                              ) : showBothProducts ? (
+                                <>
+                                  <p className="font-bold text-orange-400">🟠 UpConta: {formatCurrency(d.upcontaMonto)}</p>
+                                  <p className="font-bold text-blue-400">🔵 Firmas: {formatCurrency(d.firmasMonto)}</p>
+                                  <p className="font-black text-emerald-400 border-t border-slate-700 pt-0.5">Total: {formatCurrency(d.totalMonto)}</p>
+                                </>
+                              ) : (
+                                <p className="font-black text-emerald-400 pt-1">Sin IVA: {formatCurrency(d.totalMonto)}</p>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    {isAccess1998 ? (
+                      <>
+                        <Legend iconType="circle" wrapperStyle={{ paddingTop: "6px", fontSize: "11px", fontWeight: "700" }} />
+                        <Line
+                          type="monotone"
+                          dataKey="firmasNormalMonto"
+                          name="Ventas Firmas ($)"
+                          stroke="#2563EB"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: "#2563EB", strokeWidth: 2, stroke: "#FFFFFF" }}
+                          activeDot={{ r: 6, fill: "#1D4ED8" }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="conveniosMonto"
+                          name="Venta Convenios ($)"
+                          stroke="#8B5CF6"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: "#8B5CF6", strokeWidth: 2, stroke: "#FFFFFF" }}
+                          activeDot={{ r: 6, fill: "#7C3AED" }}
+                        />
+                      </>
+                    ) : showBothProducts ? (
+                      <>
+                        <Legend iconType="circle" wrapperStyle={{ paddingTop: "6px", fontSize: "11px", fontWeight: "700" }} />
+                        <Line
+                          type="monotone"
+                          dataKey="upcontaMonto"
+                          name="UpConta ($)"
+                          stroke="#F97316"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: "#F97316", strokeWidth: 2, stroke: "#FFFFFF" }}
+                          activeDot={{ r: 6, fill: "#EA580C" }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="firmasMonto"
+                          name="Firmas ($)"
+                          stroke="#2563EB"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: "#2563EB", strokeWidth: 2, stroke: "#FFFFFF" }}
+                          activeDot={{ r: 6, fill: "#1D4ED8" }}
+                        />
+                      </>
+                    ) : companyMode === "upconta" || selectedCategory === "upconta" ? (
+                      <Line
+                        type="monotone"
+                        dataKey="upcontaMonto"
+                        name="UpConta ($)"
+                        stroke="#F97316"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: "#F97316", strokeWidth: 2, stroke: "#FFFFFF" }}
+                        activeDot={{ r: 6, fill: "#EA580C" }}
+                      />
+                    ) : (
+                      <Line
+                        type="monotone"
+                        dataKey="firmasMonto"
+                        name="Firmas ($)"
+                        stroke="#2563EB"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: "#2563EB", strokeWidth: 2, stroke: "#FFFFFF" }}
+                        activeDot={{ r: 6, fill: "#1D4ED8" }}
+                      />
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ================= 5. LISTADO DE TIPO DE PRODUCTO / PLAN (ABAJO DE LA EVOLUCIÓN) ================= */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-4 pt-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 font-black text-slate-800 text-sm uppercase tracking-wider">
+                <FileCheck className="w-4 h-4 text-orange-500" />
+                <span>Listado por Tipo de Producto y Plan</span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Planes facturación, contables y firmas: Light, Base, ERP Start, etc. con desglose de canales y ticket promedio
+              </p>
+            </div>
+
+            <div className="w-full sm:w-64">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Buscar plan o producto..."
+                  value={planSearch}
+                  onChange={(e) => setPlanSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-extrabold uppercase text-[10px] tracking-wider">
+                  <th className="py-3 px-3">Tipo de Producto / Plan</th>
+                  <th className="py-3 px-2 text-center text-emerald-700">Nuevas</th>
+                  <th className="py-3 px-2 text-center text-blue-700">Renov.</th>
+                  <th className="py-3 px-2 text-center text-amber-700">Socios</th>
+                  <th className="py-3 px-2 text-center text-purple-700">Dist.</th>
+                  <th className="py-3 px-3 text-center bg-slate-100/60 font-black">Cantidad</th>
+                  <th className="py-3 px-3 text-right">Monto (Sin IVA)</th>
+                  <th className="py-3 px-3 text-right text-slate-900 font-black">Total (Con IVA)</th>
+                  <th className="py-3 px-3 text-right text-purple-800 font-black">Ticket Prom.</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
-                {dynamicReportProduct.length > 0 ? (
-                  dynamicReportProduct.map((row, idx) => (
-                    <tr key={idx} className={idx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-50/60 hover:bg-slate-100"}>
-                      <td className="p-3 font-bold text-slate-900">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
-                          row.linea === "UPCONTA" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-900"
-                        }`}>
-                          {row.linea}
-                        </span>
+              <tbody className="divide-y divide-slate-100">
+                {filteredProductPlanRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-slate-400 font-bold">
+                      No se encontraron planes para los filtros seleccionados
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProductPlanRows.map((row, idx) => (
+                    <tr key={row.plan} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/40 hover:bg-slate-50"}>
+                      <td className="py-2.5 px-3 font-bold text-slate-900">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-extrabold text-slate-900">{row.plan}</span>
+                            {isAccess1998 && row.conveniosCount > 0 && (
+                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
+                                Convenio (&gt; $100): {row.conveniosCount} vtas
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-medium">{row.producto}</span>
+                        </div>
                       </td>
-                      <td className="p-3 font-extrabold text-slate-900">{row.producto}</td>
-                      {activeReportAdvisers.map(adv => (
-                        <td key={adv.key} className="p-3 text-right">
-                          {formatCurrency(((row as any)[adv.key] || 0))}
-                        </td>
-                      ))}
-                      <td className="p-3 text-right font-black text-slate-900 bg-orange-50">{formatCurrency(row.total)}</td>
+                      <td className="py-2.5 px-2 text-center font-bold text-emerald-700">
+                        {row.nuevas > 0 ? row.nuevas : "-"}
+                      </td>
+                      <td className="py-2.5 px-2 text-center font-bold text-blue-700">
+                        {row.renovaciones > 0 ? row.renovaciones : "-"}
+                      </td>
+                      <td className="py-2.5 px-2 text-center font-bold text-amber-700">
+                        {row.socios > 0 ? row.socios : "-"}
+                      </td>
+                      <td className="py-2.5 px-2 text-center font-bold text-purple-700">
+                        {row.distribuidores > 0 ? row.distribuidores : "-"}
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-black text-slate-900 bg-slate-100/40">
+                        {row.cantidad}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-bold text-slate-700">
+                        {formatCurrency(row.montoSinIva)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-black text-slate-900">
+                        {formatCurrency(row.totalConIva)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-black text-purple-700">
+                        {formatCurrency(row.ticketPromedio)}
+                      </td>
                     </tr>
                   ))
-                ) : (
-                  <tr>
-                    <td colSpan={3 + activeReportAdvisers.length} className="p-8 text-center text-slate-500 font-bold">
-                      No hay registros de productos para los filtros seleccionados.
-                    </td>
-                  </tr>
                 )}
               </tbody>
-              <tfoot className="bg-slate-900 text-white font-black text-xs">
-                <tr>
-                  <td colSpan={2} className="p-3 text-right uppercase tracking-wider">TOTAL GENERAL FILTRADO</td>
-                  {activeReportAdvisers.map(adv => (
-                    <td key={adv.key} className="p-3 text-right text-amber-300">
-                      {formatCurrency(dynamicReportProduct.reduce((a, b) => a + ((b as any)[adv.key] || 0), 0))}
+              {filteredProductPlanRows.length > 0 && (
+                <tfoot>
+                  <tr className="bg-slate-900 text-white font-black text-xs border-t-2 border-slate-900">
+                    <td className="py-3 px-3 uppercase tracking-wider text-[11px]">
+                      TOTAL CONSOLIDADO ({filteredProductPlanRows.length} planes)
                     </td>
-                  ))}
-                  <td className="p-3 text-right bg-orange-500 text-white font-black">{formatCurrency(totalVentasMonto)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-
-          {/* ================= 2 TABLAS CONSOLIDADAS Y ESPECÍFICAS: NUEVAS, RENOVACIÓN Y SOCIO ================= */}
-          <ProductModalitiesTables
-            sales={filteredSales}
-            formatCurrency={formatCurrency}
-            companyMode={companyMode}
-          />
-        </div>
-      )}
-
-      {/* ================= VIEW 3: GRANULAR DETALLE DE VENTAS TABLE ================= */}
-      {activeViewTab === "detalle" && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-4">
-            <div>
-              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <Table className="w-5 h-5 text-blue-600" />
-                Registro Granular de Ventas ({filteredSales.length} resultados)
-              </h3>
-              <p className="text-xs text-slate-500">
-                Listado de transacciones individuales ordenadas con la última venta destacada.
-              </p>
-            </div>
-            <div className="text-xs font-bold text-slate-600">
-              Total Filtrado: <strong className="text-emerald-600 text-sm">{formatCurrency(totalVentasMonto)}</strong>
-            </div>
-          </div>
-
-          {/* DESTACADO: ÚLTIMA VENTA REGISTRADA */}
-          {latestSale && (
-            <div className="bg-gradient-to-r from-[#0B2545] via-[#003566] to-[#0B2545] text-white rounded-2xl p-4 sm:p-5 shadow-md border border-orange-500/40 space-y-2">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="bg-orange-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
-                  <Flame className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
-                  <span>ÚLTIMA VENTA REGISTRADA</span>
-                </span>
-                <span className="text-xs font-mono text-amber-300 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  Fecha de Cierre: {latestSale.fecha}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-slate-700/60">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Asesor Comercial</span>
-                  <span className="text-sm font-extrabold text-white">{latestSale.asesor}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Cliente / RUC</span>
-                  <span className="text-sm font-bold text-slate-200 truncate block">{latestSale.nombre} ({latestSale.ruc})</span>
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Producto / Plan</span>
-                  <span className="text-sm font-bold text-orange-300 truncate block">{latestSale.producto} {latestSale.plan ? `- ${latestSale.plan}` : ''}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Monto Total (Sin IVA)</span>
-                  <span className="text-lg font-black text-emerald-400">{formatCurrency(latestSale.totalSinIva)}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 max-h-[500px] overflow-y-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-900 text-white uppercase text-[10px] font-black tracking-wider sticky top-0 z-10">
-                <tr>
-                  <th className="p-3">#</th>
-                  <th className="p-3">Fecha</th>
-                  <th className="p-3">Asesor</th>
-                  <th className="p-3">Cliente</th>
-                  <th className="p-3">RUC</th>
-                  <th className="p-3">Producto</th>
-                  <th className="p-3">Plan</th>
-                  <th className="p-3 text-right">Total Sin IVA ($)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
-                {sortedSales.slice(0, 1000).map((row, idx) => (
-                  <tr key={idx} className={idx === 0 ? "bg-amber-50/80 hover:bg-amber-100/80 border-l-4 border-l-orange-500 font-bold" : idx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-50 hover:bg-slate-100"}>
-                    <td className="p-3 text-slate-400 font-mono">{idx + 1}</td>
-                    <td className="p-3 font-semibold text-slate-600">{row.fecha}</td>
-                    <td className="p-3 font-bold text-slate-900">{row.asesor}</td>
-                    <td className="p-3 max-w-xs truncate font-semibold">{row.nombre}</td>
-                    <td className="p-3 font-mono text-slate-600">{row.ruc}</td>
-                    <td className="p-3 font-bold text-blue-900">{row.producto}</td>
-                    <td className="p-3">{row.plan}</td>
-                    <td className="p-3 text-right font-black text-emerald-600">{formatCurrency(row.totalSinIva)}</td>
+                    <td className="py-3 px-2 text-center text-emerald-300">
+                      {filteredProductPlanRows.reduce((a, b) => a + b.nuevas, 0)}
+                    </td>
+                    <td className="py-3 px-2 text-center text-blue-300">
+                      {filteredProductPlanRows.reduce((a, b) => a + b.renovaciones, 0)}
+                    </td>
+                    <td className="py-3 px-2 text-center text-amber-300">
+                      {filteredProductPlanRows.reduce((a, b) => a + b.socios, 0)}
+                    </td>
+                    <td className="py-3 px-2 text-center text-purple-300">
+                      {filteredProductPlanRows.reduce((a, b) => a + b.distribuidores, 0)}
+                    </td>
+                    <td className="py-3 px-3 text-center text-orange-400 text-sm">
+                      {filteredProductPlanRows.reduce((a, b) => a + b.cantidad, 0)}
+                    </td>
+                    <td className="py-3 px-3 text-right text-emerald-300">
+                      {formatCurrency(filteredProductPlanRows.reduce((a, b) => a + b.montoSinIva, 0))}
+                    </td>
+                    <td className="py-3 px-3 text-right text-white text-sm">
+                      {formatCurrency(filteredProductPlanRows.reduce((a, b) => a + b.totalConIva, 0))}
+                    </td>
+                    <td className="py-3 px-3 text-right text-purple-300">
+                      {formatCurrency(
+                        filteredProductPlanRows.reduce((a, b) => a + b.cantidad, 0) > 0
+                          ? filteredProductPlanRows.reduce((a, b) => a + b.montoSinIva, 0) /
+                              filteredProductPlanRows.reduce((a, b) => a + b.cantidad, 0)
+                          : 0
+                      )}
+                    </td>
                   </tr>
-                ))}
-              </tbody>
+                </tfoot>
+              )}
             </table>
           </div>
-          {sortedSales.length > 1000 && (
-            <div className="text-center text-xs text-slate-500 pt-2">
-              Mostrando las primeras 1000 de {sortedSales.length} transacciones filtradas.
-            </div>
-          )}
         </div>
-      )}
-
-      {/* ================= VIEW 4: TABLA CONSOLIDADA DE PRODUCTOS (CANTIDAD, MONTO Y TICKET) ================= */}
-      {activeViewTab === "tabla_productos" && (
-        <ProductSummaryTable
-          sales={baseSales}
-          companyMode={companyMode}
-          allAdvisers={allAdvisers}
-          formatCurrency={formatCurrency}
-        />
-      )}
+      </div>
     </div>
   );
 }

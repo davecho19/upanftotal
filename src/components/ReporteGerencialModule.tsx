@@ -25,6 +25,16 @@ import {
 import { jsPDF } from "jspdf";
 import { INITIAL_OFFLINE_SALES } from "../salesData";
 import { SaleTransaction, getStoredSales } from "../utils/salesStorage";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend
+} from "recharts";
 
 export interface ReporteGerencialModuleProps {
   empresa: "upconta" | "firmas";
@@ -943,6 +953,94 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
     };
   }, [indicadoresSemanas]);
 
+  // Formateador de moneda
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(val);
+  };
+
+  // Evolución Semanal o Mensual para Indicadores Comerciales Clave (igual al Dashboard)
+  // - En reporte semanal: se comparan las 5 semanas del mes independientemente de si se elige una sola semana
+  // - En reporte mensual: cambia a evolución mensual (12 meses) para hacer el comparativo general
+  const evolutionReportData = useMemo(() => {
+    if (tipoFiltro === "mes") {
+      // Evolución mensual para hacer el comparativo general del año seleccionado
+      const mesesList = [
+        { num: 1, key: "01", name: "Enero", short: "Ene" },
+        { num: 2, key: "02", name: "Febrero", short: "Feb" },
+        { num: 3, key: "03", name: "Marzo", short: "Mar" },
+        { num: 4, key: "04", name: "Abril", short: "Abr" },
+        { num: 5, key: "05", name: "Mayo", short: "May" },
+        { num: 6, key: "06", name: "Junio", short: "Jun" },
+        { num: 7, key: "07", name: "Julio", short: "Jul" },
+        { num: 8, key: "08", name: "Agosto", short: "Ago" },
+        { num: 9, key: "09", name: "Septiembre", short: "Sep" },
+        { num: 10, key: "10", name: "Octubre", short: "Oct" },
+        { num: 11, key: "11", name: "Noviembre", short: "Nov" },
+        { num: 12, key: "12", name: "Diciembre", short: "Dic" }
+      ];
+
+      return mesesList.map((m) => {
+        const prefix = `${anioSeleccionado}-${m.key}`;
+        const monthInfo = MESES_MAP[m.key];
+        const monthSales = companySales.filter((item) => {
+          const f = item.fecha || "";
+          if (f.startsWith(prefix)) return true;
+          const mesField = (item.mes || "").toLowerCase();
+          if (monthInfo) {
+            if (mesField.includes(monthInfo.en.toLowerCase()) && mesField.includes(anioSeleccionado)) return true;
+            if (mesField.includes(monthInfo.es.toLowerCase()) && mesField.includes(anioSeleccionado)) return true;
+          }
+          return false;
+        });
+
+        const cantidad = monthSales.length;
+        const monto = monthSales.reduce((acc, s) => acc + getSaleAmount(s), 0);
+        const ticketPromedio = cantidad > 0 ? monto / cantidad : 0;
+
+        return {
+          periodo: m.short,
+          periodoDetalle: `${m.name} ${anioSeleccionado}`,
+          label: `${m.name} ${anioSeleccionado}`,
+          cantidad,
+          monto,
+          ticketPromedio,
+          isCurrent: m.key === mesSeleccionado
+        };
+      });
+    } else {
+      // Evolución semanal: se siguen comparando todas las semanas del mes seleccionado
+      const yr = parseInt(anioSeleccionado, 10) || now.getFullYear();
+      const m = parseInt(mesSeleccionado, 10) || (now.getMonth() + 1);
+
+      return [1, 2, 3, 4, 5].map((sem) => {
+        const wRange = getWeekRangeForMonthAndWeek(yr, m, sem);
+        const weekSales = companySales.filter((item) => {
+          const f = item.fecha || "";
+          return f >= wRange.startDate && f <= wRange.endDate;
+        });
+
+        const cantidad = weekSales.length;
+        const monto = weekSales.reduce((acc, s) => acc + getSaleAmount(s), 0);
+        const ticketPromedio = cantidad > 0 ? monto / cantidad : 0;
+
+        return {
+          periodo: `Semana ${sem}`,
+          periodoDetalle: `${wRange.label} de ${nombreMesSeleccionado}`,
+          label: `Semana ${sem} (${wRange.label} de ${nombreMesSeleccionado})`,
+          cantidad,
+          monto,
+          ticketPromedio,
+          isCurrent: String(sem) === String(semanaSeleccionada)
+        };
+      });
+    }
+  }, [tipoFiltro, anioSeleccionado, mesSeleccionado, semanaSeleccionada, companySales, nombreMesSeleccionado, now]);
+
   // Sincronizar datos con el Dashboard en tiempo real
   const handleSincronizarDashboard = () => {
     try {
@@ -1474,64 +1572,76 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
     drawDecorations();
 
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(22);
+    pdf.setFontSize(20);
     pdf.setTextColor(15, 23, 42);
-    pdf.text("INDICADORES COMERCIALES CLAVE", W / 2, 22, { align: "center" });
+    pdf.text(
+      tipoFiltro === "mes"
+        ? "INDICADORES COMERCIALES CLAVE: EVOLUCIÓN MENSUAL"
+        : "INDICADORES COMERCIALES CLAVE: EVOLUCIÓN SEMANAL",
+      W / 2,
+      22,
+      { align: "center" }
+    );
 
-    // Tabla de Indicadores Semanales
+    // Tabla de Evolución en PDF
+    const isMesPdf = tipoFiltro === "mes";
     const indStartY = 30;
-    const iColX = [30, 75, 140, 175, 205, 240, W - 30];
-    const iRowH = 8;
+    const iColX = [28, 65, 145, 185, 225, W - 28];
+    const iRowH = isMesPdf ? 5 : 8;
 
     pdf.setFillColor(16, 42, 67);
-    pdf.rect(iColX[0], indStartY, iColX[6] - iColX[0], 9, "F");
+    pdf.rect(iColX[0], indStartY, iColX[5] - iColX[0], isMesPdf ? 6.5 : 8.5, "F");
 
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(9);
+    pdf.setFontSize(isMesPdf ? 8 : 8.5);
     pdf.setTextColor(255, 255, 255);
-    pdf.text("Semana", iColX[0] + 5, indStartY + 6);
-    pdf.text("Período", iColX[1] + 5, indStartY + 6);
-    pdf.text("MQL", iColX[2] + 5, indStartY + 6);
-    pdf.text("SQL", iColX[3] + 5, indStartY + 6);
-    pdf.text("HIT RATE", iColX[4] + 3, indStartY + 6);
-    pdf.text("LOST RATE", iColX[5] + 3, indStartY + 6);
+    pdf.text(isMesPdf ? "Mes" : "Semana", iColX[0] + 4, indStartY + (isMesPdf ? 4.5 : 6));
+    pdf.text("Período / Detalle", iColX[1] + 4, indStartY + (isMesPdf ? 4.5 : 6));
+    pdf.text(esUpConta ? "Ventas UpConta" : "Firmas Emitidas", iColX[2] + 4, indStartY + (isMesPdf ? 4.5 : 6));
+    pdf.text("Facturado ($)", iColX[3] + 4, indStartY + (isMesPdf ? 4.5 : 6));
+    pdf.text("Ticket Promedio", iColX[4] + 4, indStartY + (isMesPdf ? 4.5 : 6));
 
-    indicadoresSemanas.forEach((sem, sIdx) => {
-      const y = indStartY + 9 + sIdx * iRowH;
-      if (sIdx % 2 === 0) {
+    const totalEvolCantidad = evolutionReportData.reduce((acc, curr) => acc + curr.cantidad, 0);
+    const totalEvolMonto = evolutionReportData.reduce((acc, curr) => acc + curr.monto, 0);
+
+    const rowsToShow = isMesPdf ? evolutionReportData.slice(0, 12) : evolutionReportData.slice(0, 5);
+
+    rowsToShow.forEach((row, sIdx) => {
+      const y = indStartY + (isMesPdf ? 6.5 : 8.5) + sIdx * iRowH;
+      if (row.isCurrent) {
+        pdf.setFillColor(esUpConta ? 255 : 239, esUpConta ? 247 : 246, esUpConta ? 237 : 255);
+      } else if (sIdx % 2 === 0) {
         pdf.setFillColor(255, 255, 255);
       } else {
         pdf.setFillColor(248, 250, 252);
       }
-      pdf.rect(iColX[0], y, iColX[6] - iColX[0], iRowH, "F");
+      pdf.rect(iColX[0], y, iColX[5] - iColX[0], iRowH, "F");
 
       pdf.setDrawColor(226, 232, 240);
-      pdf.line(iColX[0], y + iRowH, iColX[6], y + iRowH);
+      pdf.line(iColX[0], y + iRowH, iColX[5], y + iRowH);
 
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(8.5);
+      pdf.setFont("helvetica", row.isCurrent ? "bold" : "normal");
+      pdf.setFontSize(isMesPdf ? 7.5 : 8);
       pdf.setTextColor(15, 23, 42);
-      pdf.text(sem.semana, iColX[0] + 5, y + 5.5);
-      pdf.text(sem.periodo, iColX[1] + 5, y + 5.5);
-      pdf.text(`${sem.mql}`, iColX[2] + 8, y + 5.5);
-      pdf.text(`${sem.sql}`, iColX[3] + 8, y + 5.5);
-      pdf.text(`${sem.hitRate.toFixed(1)}%`, iColX[4] + 5, y + 5.5);
-      pdf.text(`${sem.lostRate.toFixed(1)}%`, iColX[5] + 5, y + 5.5);
+      pdf.text(row.periodo, iColX[0] + 4, y + (isMesPdf ? 3.8 : 5.5));
+      pdf.text(row.periodoDetalle, iColX[1] + 4, y + (isMesPdf ? 3.8 : 5.5));
+      pdf.text(`${row.cantidad}`, iColX[2] + 15, y + (isMesPdf ? 3.8 : 5.5));
+      pdf.text(`$${row.monto.toFixed(2)}`, iColX[3] + 4, y + (isMesPdf ? 3.8 : 5.5));
+      pdf.text(`$${row.ticketPromedio.toFixed(2)}`, iColX[4] + 4, y + (isMesPdf ? 3.8 : 5.5));
     });
 
-    // Fila Total Mes
-    const totIndY = indStartY + 9 + indicadoresSemanas.length * iRowH;
+    // Fila Total
+    const totIndY = indStartY + (isMesPdf ? 6.5 : 8.5) + rowsToShow.length * iRowH;
     pdf.setFillColor(241, 245, 249);
-    pdf.rect(iColX[0], totIndY, iColX[6] - iColX[0], 9, "F");
+    pdf.rect(iColX[0], totIndY, iColX[5] - iColX[0], isMesPdf ? 6.5 : 8.5, "F");
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(9);
+    pdf.setFontSize(isMesPdf ? 8 : 8.5);
     pdf.setTextColor(15, 23, 42);
-    pdf.text("Total mes", iColX[1] + 5, totIndY + 6);
-
-    pdf.text(`${totalMesIndicadores.mql}`, iColX[2] + 8, totIndY + 6);
-    pdf.text(`${totalMesIndicadores.sql}`, iColX[3] + 8, totIndY + 6);
-    pdf.text(`${totalMesIndicadores.hitRate.toFixed(1)}%`, iColX[4] + 5, totIndY + 6);
-    pdf.text(`${totalMesIndicadores.lostRate.toFixed(1)}%`, iColX[5] + 5, totIndY + 6);
+    pdf.text("TOTAL CONSOLIDADO", iColX[0] + 4, totIndY + (isMesPdf ? 4.5 : 6));
+    pdf.text(`${totalEvolCantidad}`, iColX[2] + 15, totIndY + (isMesPdf ? 4.5 : 6));
+    pdf.text(`$${totalEvolMonto.toFixed(2)}`, iColX[3] + 4, totIndY + (isMesPdf ? 4.5 : 6));
+    const avgTicketPdf = totalEvolCantidad > 0 ? totalEvolMonto / totalEvolCantidad : 0;
+    pdf.text(`$${avgTicketPdf.toFixed(2)}`, iColX[4] + 4, totIndY + (isMesPdf ? 4.5 : 6));
 
     // 4 BANNERS HORIZONTALES DE INDICADORES FINANCIEROS (AL FINAL)
     const bStartY = 96;
@@ -2536,57 +2646,182 @@ export function ReporteGerencialModule({ empresa }: ReporteGerencialModuleProps)
         <div className={`h-1 ${theme.accentBg} mx-4`}></div>
 
         <div className="p-6 sm:p-10 space-y-6">
-          <div className="text-center">
-            <h3 className="text-xl sm:text-2xl font-black text-slate-900">
-              INDICADORES COMERCIALES CLAVE
-            </h3>
-            <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-1 max-w-3xl mx-auto">
-              <span className="font-bold text-slate-700">MQL:</span> Total de leads recibidos |{" "}
-              <span className="font-bold text-slate-700">SQL:</span> Leads calificados (Interactuar, Presentar, Reservar, Negociar y Pendiente de pago) |{" "}
-              <span className="font-bold text-emerald-700">Hit Rate:</span> % Ganado / Total Leads |{" "}
-              <span className="font-bold text-rose-700">Lost Rate:</span> % Perdido / Total Leads
-            </p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
+                <TrendingUp className={`w-6 h-6 ${esUpConta ? "text-orange-500" : "text-blue-600"}`} />
+                <span>INDICADORES COMERCIALES CLAVE: {tipoFiltro === "mes" ? "EVOLUCIÓN MENSUAL" : "EVOLUCIÓN SEMANAL"}</span>
+              </h3>
+              <p className="text-xs text-slate-500 font-medium mt-1">
+                {tipoFiltro === "mes"
+                  ? `Comparativo mensual a lo largo del año ${anioSeleccionado} para ${nombreEmpresa}`
+                  : `Comparativo continuo de las semanas de ${nombreMesSeleccionado} ${anioSeleccionado} para ${nombreEmpresa}`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-black px-3 py-1 rounded-full border ${esUpConta ? "bg-orange-50 text-orange-800 border-orange-200" : "bg-blue-50 text-blue-800 border-blue-200"}`}>
+                {tipoFiltro === "mes" ? `Mes en foco: ${nombreMesSeleccionado}` : `Semana en foco: Semana ${semanaSeleccionada}`}
+              </span>
+            </div>
           </div>
 
-          {/* Tabla de Indicadores Semanales */}
+          {/* Gráficos Lineales de Evolución (Cantidad y Monto) igual al Dashboard */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Gráfico 1: Cantidad de Ventas */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <TrendingUp className={`w-3.5 h-3.5 ${esUpConta ? "text-orange-500" : "text-blue-600"}`} />
+                  {tipoFiltro === "mes" ? "Evolución Mensual: Cantidad de Ventas" : "Evolución Semanal: Cantidad de Ventas"}
+                </span>
+                <span className="text-xs font-black text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                  Total: {evolutionReportData.reduce((acc, curr) => acc + curr.cantidad, 0)} {esUpConta ? "ventas" : "firmas"}
+                </span>
+              </div>
+              <div className="h-60 w-full pt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={evolutionReportData} margin={{ top: 10, right: 15, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis dataKey="periodo" tick={{ fontSize: 10, fill: "#475569", fontWeight: 700 }} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (active && payload && payload.length) {
+                          const d = payload[0].payload;
+                          return (
+                            <div className="bg-[#0B2545] text-white p-2.5 rounded-xl border border-slate-700 text-xs shadow-2xl space-y-1">
+                              <p className="font-extrabold text-white border-b border-slate-700 pb-1">{d.label || d.periodo}</p>
+                              <p className={`font-black pt-1 ${esUpConta ? "text-orange-400" : "text-blue-400"}`}>
+                                {d.cantidad} {esUpConta ? "ventas realizadas" : "firmas emitidas"}
+                              </p>
+                              <p className="text-[10px] text-slate-300 font-bold">Monto: {formatCurrency(d.monto)}</p>
+                              <p className="text-[10px] text-emerald-400 font-bold">Ticket prom: {formatCurrency(d.ticketPromedio)}</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="cantidad"
+                      name={esUpConta ? "UpConta" : "Firmas"}
+                      stroke={esUpConta ? "#F97316" : "#2563EB"}
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: esUpConta ? "#F97316" : "#2563EB", strokeWidth: 2, stroke: "#FFFFFF" }}
+                      activeDot={{ r: 6, fill: esUpConta ? "#EA580C" : "#1D4ED8" }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Gráfico 2: Monto Facturado */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                  {tipoFiltro === "mes" ? "Evolución Mensual: Monto Facturado ($)" : "Evolución Semanal: Monto Facturado ($)"}
+                </span>
+                <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  Total: {formatCurrency(evolutionReportData.reduce((acc, curr) => acc + curr.monto, 0))}
+                </span>
+              </div>
+              <div className="h-60 w-full pt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={evolutionReportData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis dataKey="periodo" tick={{ fontSize: 10, fill: "#475569", fontWeight: 700 }} tickLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: "#94A3B8" }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
+                    />
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (active && payload && payload.length) {
+                          const d = payload[0].payload;
+                          return (
+                            <div className="bg-[#0B2545] text-white p-2.5 rounded-xl border border-slate-700 text-xs shadow-2xl space-y-1">
+                              <p className="font-extrabold text-white border-b border-slate-700 pb-1">{d.label || d.periodo}</p>
+                              <p className="font-black text-emerald-400 pt-1">Facturado: {formatCurrency(d.monto)}</p>
+                              <p className="text-[10px] text-slate-300 font-bold">Operaciones: {d.cantidad} {esUpConta ? "ventas" : "firmas"}</p>
+                              <p className="text-[10px] text-purple-300 font-bold">Ticket prom: {formatCurrency(d.ticketPromedio)}</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="monto"
+                      name="Facturado ($)"
+                      stroke="#10B981"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: "#0B2545", strokeWidth: 2, stroke: "#FFFFFF" }}
+                      activeDot={{ r: 6, fill: "#059669" }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabla resumen comparativa compacta */}
           <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-[#102A43] text-white text-xs font-black tracking-wider">
-                  <th className="py-3 px-4">Semana</th>
-                  <th className="py-3 px-4">Período</th>
-                  <th className="py-3 px-4 text-center">MQL</th>
-                  <th className="py-3 px-4 text-center">SQL</th>
-                  <th className="py-3 px-4 text-center">HIT RATE</th>
-                  <th className="py-3 px-4 text-center">LOST RATE</th>
+                <tr className="bg-[#102A43] text-white text-[11px] font-black tracking-wider uppercase">
+                  <th className="py-2.5 px-4">{tipoFiltro === "mes" ? "Mes" : "Semana"}</th>
+                  <th className="py-2.5 px-4 text-center">Cantidad ({esUpConta ? "Ventas" : "Firmas"})</th>
+                  <th className="py-2.5 px-4 text-right">Facturado ($)</th>
+                  <th className="py-2.5 px-4 text-right">Ticket Promedio</th>
+                  <th className="py-2.5 px-4 text-center">% del Total</th>
                 </tr>
               </thead>
-              <tbody className="text-xs divide-y divide-slate-100 font-medium text-slate-700">
-                {indicadoresSemanas.map((sem, sIdx) => (
-                  <tr key={sem.semana} className={sIdx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                    <td className="py-2.5 px-4 font-black text-slate-900">{sem.semana}</td>
-                    <td className="py-2.5 px-4 text-slate-600 font-semibold">{sem.periodo}</td>
-                    <td className="py-2.5 px-4 text-center font-bold text-slate-800">{sem.mql}</td>
-                    <td className="py-2.5 px-4 text-center font-bold text-slate-800">{sem.sql}</td>
-                    <td className="py-2.5 px-4 text-center font-black text-emerald-700">{sem.hitRate.toFixed(1)}%</td>
-                    <td className="py-2.5 px-4 text-center font-black text-rose-700">{sem.lostRate.toFixed(1)}%</td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                {evolutionReportData.map((row, idx) => {
+                  const totalPeriodo = evolutionReportData.reduce((acc, curr) => acc + curr.cantidad, 0);
+                  const pct = totalPeriodo > 0 ? (row.cantidad / totalPeriodo) * 100 : 0;
+                  return (
+                    <tr
+                      key={row.periodo}
+                      className={row.isCurrent ? (esUpConta ? "bg-orange-50/80 font-bold" : "bg-blue-50/80 font-bold") : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}
+                    >
+                      <td className="py-2.5 px-4 font-black text-slate-900 flex items-center gap-2">
+                        <span>{row.label || row.periodo}</span>
+                        {row.isCurrent && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-black ${esUpConta ? "bg-orange-200 text-orange-900" : "bg-blue-200 text-blue-900"}`}>
+                            Filtro Activo
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-4 text-center font-black text-slate-900">{row.cantidad}</td>
+                      <td className="py-2.5 px-4 text-right font-black text-emerald-700">{formatCurrency(row.monto)}</td>
+                      <td className="py-2.5 px-4 text-right font-bold text-slate-700">{formatCurrency(row.ticketPromedio)}</td>
+                      <td className="py-2.5 px-4 text-center font-bold text-slate-600">{pct.toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
                 <tr className="bg-slate-100 font-black text-xs text-slate-900 border-t-2 border-slate-300">
-                  <td className="py-3 px-4 uppercase">Total mes</td>
-                  <td className="py-3 px-4"></td>
-                  <td className="py-3 px-4 text-center font-black">
-                    {totalMesIndicadores.mql}
+                  <td className="py-2.5 px-4 uppercase">Total Consolidado</td>
+                  <td className={`py-2.5 px-4 text-center text-sm font-black ${esUpConta ? "text-orange-700" : "text-blue-700"}`}>
+                    {evolutionReportData.reduce((acc, curr) => acc + curr.cantidad, 0)}
                   </td>
-                  <td className="py-3 px-4 text-center font-black">
-                    {totalMesIndicadores.sql}
+                  <td className="py-2.5 px-4 text-right text-emerald-800 text-sm font-black">
+                    {formatCurrency(evolutionReportData.reduce((acc, curr) => acc + curr.monto, 0))}
                   </td>
-                  <td className="py-3 px-4 text-center text-emerald-800 font-black">
-                    {totalMesIndicadores.hitRate.toFixed(1)}%
+                  <td className="py-2.5 px-4 text-right text-slate-900 font-black">
+                    {formatCurrency(
+                      evolutionReportData.reduce((acc, curr) => acc + curr.cantidad, 0) > 0
+                        ? evolutionReportData.reduce((acc, curr) => acc + curr.monto, 0) /
+                            evolutionReportData.reduce((acc, curr) => acc + curr.cantidad, 0)
+                        : 0
+                    )}
                   </td>
-                  <td className="py-3 px-4 text-center text-rose-800 font-black">
-                    {totalMesIndicadores.lostRate.toFixed(1)}%
-                  </td>
+                  <td className="py-2.5 px-4 text-center font-black text-slate-900">100%</td>
                 </tr>
               </tbody>
             </table>

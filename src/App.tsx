@@ -5683,7 +5683,7 @@ export default function App() {
         {activeTab === "mensajes" && <MensajesModule />}
 
         {/* ==================================== TABS: DASHBOARD METRICAS ==================================== */}
-        {activeTab === "dashboard" && <DashboardModule companyMode={companyMode} />}
+        {activeTab === "dashboard" && <DashboardModule companyMode={companyMode} accessProfile={accessProfile} />}
 
         {/* ==================================== TABS: REPORTES COMERCIALES GERENCIALES ==================================== */}
         {activeTab === "reporte_upconta" && accessProfile === "180890" && <ReporteGerencialModule empresa="upconta" />}
