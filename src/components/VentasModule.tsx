@@ -382,9 +382,23 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
     return prod.planes || [];
   };
 
+  const isFirmasProfile =
+    accessProfile === "1998" ||
+    accessProfile === "123456" ||
+    accessProfile === "070926" ||
+    mode === "firmas" ||
+    companyMode === "firmas";
+
+  // En el perfil de firmas (123456 y 1998) cuando se elija distribuidor,
+  // únicamente en esa selección no existe el límite de ingreso del valor en la vigencia de la firma,
+  // independiente del asesor seleccionado.
+  const isDistribuidorSinLimite = (isFirmasProfile || isFirmas) && tipoVenta === "Distribuidor";
+
   const planesList = getPlanesList();
   const currentSelectedPlanObj = planesList[selectedPlanIndex];
-  const currentPlanTope = currentSelectedPlanObj
+  const currentPlanTope = isDistribuidorSinLimite
+    ? null
+    : currentSelectedPlanObj
     ? (FIRMAS_PRECIOS_TOPE[productoKey]?.[currentSelectedPlanObj.label] ?? null)
     : null;
 
@@ -493,7 +507,9 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
       return;
     }
 
-    const firmaTope = selectedPlanObj ? (FIRMAS_PRECIOS_TOPE[productoKey]?.[selectedPlanObj.label] ?? null) : null;
+    const firmaTope = (!isDistribuidorSinLimite && selectedPlanObj)
+      ? (FIRMAS_PRECIOS_TOPE[productoKey]?.[selectedPlanObj.label] ?? null)
+      : null;
     if (firmaTope !== null && montoRegistrado > firmaTope + 0.001) {
       setStatusMessage({
         type: "error",
@@ -1365,6 +1381,11 @@ export function VentasModule({ companyMode, accessProfile }: VentasModuleProps =
                   {currentPlanTope !== null && (
                     <span className="text-[10px] text-amber-400 font-extrabold block">
                       Tope máx: ${currentPlanTope.toFixed(2)}
+                    </span>
+                  )}
+                  {isDistribuidorSinLimite && (
+                    <span className="text-[10px] text-emerald-400 font-extrabold block">
+                      Distribuidor: Sin límite de valor
                     </span>
                   )}
                 </div>
