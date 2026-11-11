@@ -122,7 +122,9 @@ export const DETALLE_SUBMODULOS: Record<string, string[]> = {
   "EMPLEADOS": ["Plataforma Individual por empleados", "Solicitud de anticipos y préstamos", "Solicitud de permisos", "Solicitud de Vacaciones"],
   "ACTIVOS FIJOS": ["Ficha de activos", "Depreciaciones", "Kárdex de control", "Acta de entrega recepción"],
   "RESTAURANTES": ["Dashboard informativo", "Meseros", "Mesas", "Comandas", "Caja Restaurante", "Distribución de pre-cuenta"],
-  "CONTINUIDAD": ["Dashboard informativo", "Agencias", "Programas", "Productos", "Versión Cuñas"]
+  "CONTINUIDAD": ["Dashboard informativo", "Agencias", "Programas", "Productos", "Versión Cuñas"],
+  "TALLERES": ["Dashboard informativo", "Órdenes de trabajo", "Recepción de vehículos/equipos", "Control de repuestos y mano de obra", "Historial de reparaciones", "Entrega y facturación de servicios"],
+  "TRANSPORTISTAS": ["Dashboard informativo", "Guías de remisión electrónicas", "Control de vehículos y conductores", "Gestión de fletes y rutas", "Liquidación a transportistas", "Facturación de transporte"]
 };
 
 export interface NichoInfo {
@@ -262,7 +264,9 @@ export const ADICIONALES_ESTANDAR: AdicionalItem[] = [
   { valor: "NÓMINA", precio: 75.00, texto: "Nómina ($75.00)" },
   { valor: "ACTIVOS FIJOS", precio: 75.00, texto: "Activos Fijos ($75.00)" },
   { valor: "RESTAURANTES", precio: 75.00, texto: "Restaurantes ($75.00)" },
-  { valor: "CONTABILIDAD", precio: 75.00, texto: "Contabilidad ($75.00)" }
+  { valor: "CONTABILIDAD", precio: 75.00, texto: "Contabilidad ($75.00)" },
+  { valor: "TALLERES", precio: 75.00, texto: "Talleres ($75.00)" },
+  { valor: "TRANSPORTISTAS", precio: 75.00, texto: "Transportistas ($75.00)" }
 ];
 
 export const ADICIONALES_CONTADOR: AdicionalItem[] = [
